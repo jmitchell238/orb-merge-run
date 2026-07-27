@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#1a3a6e" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Orb Merge Run" />
+  <meta name="description" content="Steer, merge numbered orbs, grow to 2048, and reach the goal. Don’t fall off the track!" />
+  <title>Orb Merge Run</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="icons/icon-192.png" />
+  <link rel="apple-touch-icon" href="apple-touch-icon.png" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div id="stage">
+    <canvas id="cv" width="390" height="700"></canvas>
+    <div id="versionTag"></div>
+
+    <!-- HUD (play chrome) -->
+    <div id="hud" class="play-chrome hidden">
+      <div class="hud-top">
+        <div id="hudValuePill" class="value-pill"><span id="hudValue">2</span></div>
+        <div class="hud-meta">
+          <span id="hudLevel">L1</span>
+          <span class="dot">·</span>
+          <span>💰 <span id="hudCoins">0</span></span>
+          <span class="dot">·</span>
+          <span>✨ <span id="hudMerges">0</span></span>
+        </div>
+      </div>
+      <div class="progress-track"><div id="progressBar"></div></div>
+    </div>
+    <button id="btnPauseMenu" class="icon-btn play-chrome hidden" type="button" title="Pause">☰</button>
+
+    <!-- Tutorial overlay -->
+    <div id="tutorial" class="screen-overlay hidden">
+      <div class="menu-card">
+        <h2>How to play</h2>
+        <ol class="tut-list">
+          <li><b>Drag</b> left/right (or ← →) to steer</li>
+          <li>Hit balls with the <b>same number</b> to merge &amp; grow</li>
+          <li>Avoid <b>thorns</b> (they shrink you) and <b>don’t fall off</b></li>
+          <li>Reach the checkered <b>goal</b> with the biggest number you can!</li>
+        </ol>
+        <button id="btnTutorialOk" class="primary">Got it — let’s roll!</button>
+      </div>
+    </div>
+
+    <!-- Pause -->
+    <div id="pauseOverlay" class="screen-overlay hidden">
+      <div class="menu-card">
+        <h2>Paused</h2>
+        <button id="btnResume" class="primary">▶  Resume</button>
+        <button id="btnPauseQuit" class="secondary">Main menu</button>
+      </div>
+    </div>
+
+    <!-- MENU -->
+    <div class="screen" data-screen="menu" id="screenMenu">
+      <div class="menu-card">
+        <div class="logo-orb" aria-hidden="true">2048</div>
+        <h1><span class="c1">Orb</span> <span class="c2">Merge</span> <span class="c3">Run</span></h1>
+        <p class="tagline">Steer · merge · grow · reach 2048</p>
+
+        <div class="stats">
+          <div><span class="lbl">Coins</span><strong id="statCoins">0</strong></div>
+          <div><span class="lbl">Best</span><strong id="statBest">2</strong></div>
+          <div><span class="lbl">Unlocked</span><strong id="statLevel">1</strong></div>
+        </div>
+
+        <label class="level-label" for="levelSelect">Start level</label>
+        <select id="levelSelect" class="level-select"></select>
+
+        <button id="btnPlay" class="primary">▶  Play</button>
+        <button id="btnHow" class="secondary">How to play</button>
+        <button id="muteBtn" class="ghost">🔊 Sound on</button>
+        <button id="gfxBtn" class="ghost">⚙️ GFX: High</button>
+
+        <div id="howPanel" class="how hidden">
+          <ol>
+            <li><b>Drag</b> left or right to steer your ball (keyboard ← → / A D).</li>
+            <li>Hit an orb with the <b>same number</b> — they merge into the next power of two (2→4→8…→2048).</li>
+            <li>Different numbers bounce past gently. <b>Thorns</b> cut your number in half.</li>
+            <li>Falling off the rail or into a pit ends the run. Reach the checkered goal for coins!</li>
+          </ol>
+        </div>
+
+        <p id="versionMenu" class="ver"></p>
+      </div>
+    </div>
+
+    <!-- GAME OVER -->
+    <div class="screen hidden" data-screen="over" id="screenOver">
+      <div class="menu-card">
+        <h2>Fell off!</h2>
+        <p id="overReason" class="tagline">You fell off the track!</p>
+        <div class="stats tall">
+          <div><span class="lbl">Value</span><strong id="overValue">2</strong></div>
+          <div><span class="lbl">Merges</span><strong id="overMerges">0</strong></div>
+          <div><span class="lbl">Best ever</span><strong id="overBest">2</strong></div>
+        </div>
+        <button id="btnRetry" class="primary">↻  Try again</button>
+        <button id="btnMenu" class="secondary">Main menu</button>
+        <p id="versionOver" class="ver"></p>
+      </div>
+    </div>
+
+    <!-- WIN -->
+    <div class="screen hidden" data-screen="win" id="screenWin">
+      <div class="menu-card">
+        <h2>Goal!</h2>
+        <p id="winRainbow" class="rainbow-banner hidden">🌈 Rainbow orb!</p>
+        <div class="stats tall">
+          <div><span class="lbl">Finish value</span><strong id="winValue">2</strong></div>
+          <div><span class="lbl">Coins</span><strong id="winCoins">+0</strong></div>
+          <div><span class="lbl">Merges</span><strong id="winMerges">0</strong></div>
+          <div><span class="lbl">Level</span><strong id="winLevel">1</strong></div>
+        </div>
+        <button id="btnNext" class="primary">▶  Next level</button>
+        <button id="btnWinMenu" class="secondary">Main menu</button>
+        <p id="versionWin" class="ver"></p>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/config.js"></script>
+  <script src="js/utils.js"></script>
+  <script src="js/merge.js"></script>
+  <script src="js/collision.js"></script>
+  <script src="js/save.js"></script>
+  <script src="js/audio.js"></script>
+  <script src="js/level.js"></script>
+  <script src="js/track.js"></script>
+  <script src="js/particles.js"></script>
+  <script src="js/render.js"></script>
+  <script src="js/input.js"></script>
+  <script src="js/game.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>

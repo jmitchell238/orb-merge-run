@@ -50,9 +50,10 @@ Open `http://localhost:8080`. Service workers need http://localhost or https.
 
 ## QA flags
 
-- `?debug=1` — hit radii, rail margins, coords
+- `?debug=1` — FPS, hit radii, rail margins, pit volumes, coords
 - `?level=N` — start level N
-- `?level=N&unlock=1` — also unlock through N
+- `?level=N&seed=S` — force seed (also unlocks through N)
+- `?level=N&unlock=1` — unlock through N
 
 ## Design
 

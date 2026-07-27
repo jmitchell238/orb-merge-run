@@ -106,11 +106,12 @@ const TEMPLATES = [
   },
   {
     id: 'merge_ladder',
-    length: 30, minLevel: 3, weight: 5,
+    length: 30, minLevel: 2, weight: 7,
     orbs: [
       { dx: 0, dz: 8, valueMode: 'fixed', value: 2 },
-      { dx: 0, dz: 14, valueMode: 'fixed', value: 2 },
-      { dx: 0, dz: 22, valueMode: 'fixed', value: 4 },
+      { dx: 0.2, dz: 14, valueMode: 'fixed', value: 2 },
+      { dx: 0, dz: 20, valueMode: 'fixed', value: 4 },
+      { dx: -0.2, dz: 26, valueMode: 'fixed', value: 4 },
     ],
     hazards: [],
   },
@@ -194,15 +195,16 @@ const TEMPLATES = [
   },
   {
     id: 'double_thorn_stagger',
-    length: 34, minLevel: 7, weight: 3,
+    length: 34, minLevel: 7, weight: 2,
     orbs: [
       { dx: 1.5, dz: 8, valueMode: 'expected', tierDelta: 0 },
       { dx: -1.5, dz: 18, valueMode: 'expected', tierDelta: 0 },
       { dx: 0, dz: 28, valueMode: 'expected', tierDelta: 1 },
     ],
     hazards: [
-      { type: 'thorn', dz: 10, depth: 1.2, x0: -4.5, x1: -0.5 },
-      { type: 'thorn', dz: 20, depth: 1.2, x0: 0.5, x1: 4.5 },
+      // Narrower strips — more dodge room in the middle
+      { type: 'thorn', dz: 10, depth: 1.0, x0: -4.5, x1: -1.2 },
+      { type: 'thorn', dz: 20, depth: 1.0, x0: 1.2, x1: 4.5 },
     ],
   },
   {
@@ -221,16 +223,16 @@ const TEMPLATES = [
   },
   {
     id: 'thorn_gauntlet',
-    length: 36, minLevel: 9, weight: 3,
+    length: 36, minLevel: 9, weight: 2,
     orbs: [
       { dx: 0, dz: 8, valueMode: 'expected', tierDelta: 0 },
       { dx: -2, dz: 18, valueMode: 'expected', tierDelta: 0 },
       { dx: 2, dz: 28, valueMode: 'expected', tierDelta: 1 },
     ],
+    // Only two side strips — leave center lane open (was 3 including center)
     hazards: [
-      { type: 'thorn', dz: 12, depth: 1.0, x0: 1.0, x1: 4.5 },
-      { type: 'thorn', dz: 20, depth: 1.0, x0: -4.5, x1: -1.0 },
-      { type: 'thorn', dz: 28, depth: 1.0, x0: -1.5, x1: 1.5 },
+      { type: 'thorn', dz: 12, depth: 1.0, x0: 1.8, x1: 4.5 },
+      { type: 'thorn', dz: 22, depth: 1.0, x0: -4.5, x1: -1.8 },
     ],
   },
   {
@@ -336,6 +338,66 @@ function sanitizeForLevel(L, orbs, hazards) {
     if (L === 2 && h.type === 'pit') { hazards.splice(i, 1); continue; }
     if (L === 2 && h.type === 'thorn' && h.z < 40) { hazards.splice(i, 1); continue; }
     if (L === 3 && h.type === 'pit') { hazards.splice(i, 1); continue; }
+  }
+
+  // Cap thorns per level (keep earliest, drop extras)
+  const maxThorns = MAX_THORNS_BY_LEVEL[L] != null
+    ? MAX_THORNS_BY_LEVEL[L]
+    : MAX_THORNS_BY_LEVEL[MAX_THORNS_BY_LEVEL.length - 1];
+  const thornIdx = [];
+  for (let i = 0; i < hazards.length; i++) {
+    if (hazards[i].type === 'thorn') thornIdx.push(i);
+  }
+  if (thornIdx.length > maxThorns) {
+    // sort by z ascending, keep first maxThorns
+    thornIdx.sort(function (a, b) { return hazards[a].z - hazards[b].z; });
+    const drop = thornIdx.slice(maxThorns).sort(function (a, b) { return b - a; });
+    for (let i = 0; i < drop.length; i++) hazards.splice(drop[i], 1);
+  }
+
+  // Guarantee a few center-lane value-2 orbs early so kids can always merge
+  ensureEarlyMerges(L, orbs);
+}
+
+/**
+ * Inject fixed value-2 orbs near center in z∈[10,55] if not enough exist.
+ * Mutates orbs array. Deterministic slots (no Math.random).
+ */
+function ensureEarlyMerges(L, orbs) {
+  function countEarlyTwos() {
+    let n = 0;
+    for (let i = 0; i < orbs.length; i++) {
+      const o = orbs[i];
+      if (o.value === 2 && o.z < 55 && Math.abs(o.x) < 1.5) n++;
+    }
+    return n;
+  }
+  const need = L <= 4 ? 3 : 2;
+  const slots = [
+    { x: 0, z: 12 },
+    { x: 0.25, z: 22 },
+    { x: -0.2, z: 34 },
+    { x: 0.1, z: 46 },
+  ];
+  for (let s = 0; s < slots.length && countEarlyTwos() < need; s++) {
+    const slot = slots[s];
+    let blocked = false;
+    for (let i = 0; i < orbs.length; i++) {
+      if (Math.abs(orbs[i].z - slot.z) < 2.5 && Math.abs(orbs[i].x - slot.x) < 1.0) {
+        blocked = true;
+        break;
+      }
+    }
+    if (blocked) continue;
+    orbs.push({
+      id: 'o_early_' + s,
+      x: slot.x,
+      z: slot.z,
+      value: 2,
+      radius: radiusForValue(2),
+      consumed: false,
+      ghostUntil: 0,
+    });
   }
 }
 

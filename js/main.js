@@ -163,10 +163,10 @@ function frame(now) {
   requestAnimationFrame(frame);
 }
 
-function beginPlay(level) {
+function beginPlay(level, seedOverride) {
   ensureAudio();
   // clear menu demo state
-  startLevel(level);
+  startLevel(level, seedOverride);
   showPlayUI();
 }
 
@@ -249,15 +249,15 @@ function init() {
 
   bindInput(function () { ensureAudio(); });
 
-  // query params for QA
+  // query params for QA: ?level=N&seed=S&unlock=1&debug=1
   const params = new URLSearchParams(location.search);
   if (params.has('level')) {
     const L = clamp(parseInt(params.get('level'), 10) || 1, 1, MAX_LEVEL);
-    // unlock for QA if seed also provided
     if (params.has('seed') || params.get('unlock') === '1') {
       save.maxUnlocked = Math.max(save.maxUnlocked, L);
     }
-    beginPlay(L);
+    const seed = params.has('seed') ? parseInt(params.get('seed'), 10) : undefined;
+    beginPlay(L, Number.isFinite(seed) ? seed : undefined);
   } else {
     showMenu();
   }

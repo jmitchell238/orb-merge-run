@@ -3,7 +3,7 @@
 
 // ---- Version (MAJOR.MINOR.PATCH) --------------------------------------------
 // Keep CACHE in sw.js in sync: 'orb-merge-run-' + GAME_VERSION
-const GAME_VERSION = '1.0.000';
+const GAME_VERSION = '1.1.000';
 const GAME_VERSION_LABEL = 'v' + GAME_VERSION;
 const GAME_NAME = 'Orb Merge Run';
 
@@ -12,21 +12,26 @@ const TRACK_W = 10;
 const TRACK_HALF = TRACK_W / 2; // 5
 const CURB_H = 0.45;
 const CURB_INSET = 0.35;
-const FALL_MARGIN = 0.25; // fixed — does NOT grow with ball radius
-const WARN_FRAC = 0.85;
+// Kid-friendly: wider death band so light overswipe doesn't kill (was 0.25)
+const FALL_MARGIN = 0.45;
+const WARN_FRAC = 0.82;
 
 // Ball radius
 const BASE_R = 0.50;
 const GROW = 1.12;
 const MAX_R = (TRACK_W * 0.70) / 2; // 3.5
-const HIT_PAD = 0.12;
+// Slightly fatter hitboxes so merges feel fair at speed
+const HIT_PAD = 0.18;
 
 // Motion
-const STEER_LERP = 12;
-const STEER_SPEED = 9;
+const STEER_LERP = 14;
+const STEER_SPEED = 10;
 const WORLD_PER_PX = (cssW) => 14 / Math.min(cssW || 390, 900);
 const MERGE_BOOST = 1.06;
 const MERGE_BOOST_T = 0.35;
+// Soft center magnet when near the edge (helps little hands without hard clamp)
+const EDGE_ASSIST_FRAC = 0.88;
+const EDGE_ASSIST = 2.8;
 
 // Merge / ghost
 const GHOST_S = 0.15;
@@ -34,8 +39,10 @@ const NUDGE_X = 0.55;
 const MAX_CHAIN = 4;
 
 // Thorns
-const THORN_INVULN = 0.4;
-const THORN_DEPTH = 1.2;
+const THORN_INVULN = 0.55;
+const THORN_DEPTH = 1.0;
+// Cap thorns per level (balance pass)
+const MAX_THORNS_BY_LEVEL = [0, 0, 1, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5];
 
 // Level length
 const BASE_LEN = 160;
@@ -70,7 +77,8 @@ const TIERS = [
 ];
 
 function levelSpeed(L) {
-  return Math.min(8.5 + (L - 1) * 0.45, 16);
+  // Slightly gentler ramp than v1 (cap 14.5 instead of 16)
+  return Math.min(7.8 + (L - 1) * 0.42, 14.5);
 }
 
 function finishZForLevel(L) {

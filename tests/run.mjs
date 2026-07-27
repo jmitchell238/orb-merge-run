@@ -185,10 +185,9 @@ section('swept collision');
 // ---- Support / rail / pits --------------------------------------------------
 section('support geometry');
 assert(T.isOffRail(0, 5) === false, 'center on rail');
-assert(T.isOffRail(5.3, 5) === true, 'past FALL_MARGIN off rail');
-assert(T.isOffRail(5.2, 5) === false, 'at edge+margin boundary still on? 5.2 > 5.25? wait 5+0.25=5.25');
-// |x| > 5.25 is off. 5.2 is on.
-assert(T.isOffRail(5.26, 5) === true, 'just past margin off');
+// FALL_MARGIN is 0.45 → die when |x| > 5.45
+assert(T.isOffRail(5.4, 5) === false, 'inside wider margin still on');
+assert(T.isOffRail(5.46, 5) === true, 'just past FALL_MARGIN off');
 
 const pit = { type: 'pit', x0: -1.5, x1: 1.5, z0: 10, z1: 15 };
 assert(T.hasSupport(0, 12, 5, [pit]) === false, 'mid pit no support');
@@ -244,6 +243,17 @@ assertEq(L1a.finishZ, T.finishZForLevel(1), 'finishZ match');
 assert(L1a.hazards.every(h => h.type !== 'thorn' && h.type !== 'pit'), 'L1 no hazards');
 assert(L1a.orbs.some(o => o.value === 2 && o.z < 40), 'L1 early value-2');
 assert(L1a.orbs.length >= 3, 'L1 has orbs');
+// early merge guarantee: at least 2 center-ish twos before z=55
+{
+  const early = L1a.orbs.filter(o => o.value === 2 && o.z < 55 && Math.abs(o.x) < 1.5);
+  assert(early.length >= 2, 'L1 ensureEarlyMerges (≥2 early twos)');
+}
+// thorn cap
+{
+  const L9 = T.buildLevel(9, 9 * 10007);
+  const thorns = L9.hazards.filter(h => h.type === 'thorn').length;
+  assert(thorns <= 4, 'L9 thorn cap ≤4 (got ' + thorns + ')');
+}
 
 const L2 = T.buildLevel(2, 20014);
 assert(L2.hazards.every(h => h.type !== 'pit'), 'L2 no pits');

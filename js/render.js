@@ -11,6 +11,7 @@ const cam = { x: 0, y: CAM_Y, z: -CAM_Z_BACK };
 
 let shakeT = 0, shakeMag = 0;
 let rainbowHue = 0;
+let fpsFrames = 0, fpsT = 0, fpsVal = 0;
 
 function resizeCanvas() {
   const ar = innerWidth >= innerHeight ? 16 / 9 : 9 / 16;
@@ -369,6 +370,17 @@ function drawParticles() {
   ctx.globalAlpha = 1;
 }
 
+function tickFps(dt) {
+  if (!DEBUG) return;
+  fpsFrames++;
+  fpsT += dt || 0;
+  if (fpsT >= 0.5) {
+    fpsVal = Math.round(fpsFrames / fpsT);
+    fpsFrames = 0;
+    fpsT = 0;
+  }
+}
+
 function drawDebug(player, levelData) {
   if (!player) return;
   const th = sampleTrackHalf(player.z, levelData);
@@ -384,18 +396,47 @@ function drawDebug(player, levelData) {
     ctx.lineTo(b[0], b[1]);
     ctx.stroke();
   }
-  ctx.fillStyle = 'rgba(255,255,255,0.85)';
+  // pit volumes
+  if (levelData) {
+    for (let i = 0; i < levelData.hazards.length; i++) {
+      const p = levelData.hazards[i];
+      if (p.type !== 'pit') continue;
+      const a = project(p.x0, 0.08, p.z0);
+      const b = project(p.x1, 0.08, p.z0);
+      const c = project(p.x1, 0.08, p.z1);
+      const d = project(p.x0, 0.08, p.z1);
+      if (!a || !b || !c || !d) continue;
+      ctx.fillStyle = 'rgba(80,160,255,0.2)';
+      ctx.beginPath();
+      ctx.moveTo(a[0], a[1]);
+      ctx.lineTo(b[0], b[1]);
+      ctx.lineTo(c[0], c[1]);
+      ctx.lineTo(d[0], d[1]);
+      ctx.closePath();
+      ctx.fill();
+    }
+  }
+  ctx.fillStyle = 'rgba(255,255,255,0.9)';
   ctx.font = '12px monospace';
   ctx.textAlign = 'left';
+  const seed = levelData ? levelData.seed : '—';
   ctx.fillText(
-    'x=' + player.x.toFixed(2) + ' z=' + player.z.toFixed(1) +
-    ' v=' + player.value + ' th=' + th.toFixed(2),
-    10, 20
+    fpsVal + ' fps  x=' + player.x.toFixed(2) + ' z=' + player.z.toFixed(1) +
+    ' v=' + player.value + ' th=' + th.toFixed(2) + ' seed=' + seed,
+    10, 18
   );
+  if (levelData) {
+    ctx.fillText(
+      'orbs=' + levelData.orbs.filter(function (o) { return !o.consumed; }).length +
+      '  finish=' + levelData.finishZ,
+      10, 34
+    );
+  }
 }
 
 function drawWorld(player, levelData, dt) {
   if (!ctx) resizeCanvas();
+  tickFps(dt);
   rainbowHue = (rainbowHue + (dt || 0) * 80) % 360;
 
   let ox = 0, oy = 0;

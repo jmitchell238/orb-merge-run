@@ -31,9 +31,9 @@ function makePlayer() {
   };
 }
 
-function startLevel(L) {
+function startLevel(L, seedOverride) {
   currentLevel = clamp(L | 0, 1, MAX_LEVEL);
-  const seed = currentLevel * 10007;
+  const seed = seedOverride != null ? (seedOverride | 0) : (currentLevel * 10007);
   levelData = buildLevel(currentLevel, seed);
   player = makePlayer();
   mergeCount = 0;
@@ -71,14 +71,27 @@ function dismissTutorial() {
   persist();
 }
 
-function beginDead() {
+function beginDead(reason) {
   if (state !== 'play') return;
   state = 'dead';
   deadTimer = DEAD_ANIM_S;
-  overReason = 'You fell off the track!';
+  overReason = reason || 'You fell off the track!';
   sfxDeath();
   addShake(6, 0.35);
   recordDeath();
+}
+
+function deathReasonAt(x, z, trackHalf, pits) {
+  if (isOffRail(x, trackHalf)) return 'You rolled off the edge!';
+  if (pits && pits.length) {
+    for (let i = 0; i < pits.length; i++) {
+      const p = pits[i];
+      if (z >= p.z0 && z <= p.z1 && x >= p.x0 && x <= p.x1) {
+        return 'You fell into a gap!';
+      }
+    }
+  }
+  return 'You fell off the track!';
 }
 
 function completeLevel() {
@@ -128,6 +141,13 @@ function resolveFrame(dt) {
     player.expandT -= dt;
     player.squash = 1 + 0.25 * (player.expandT / 0.2);
     if (player.expandT <= 0) player.squash = 1;
+  }
+
+  // Soft edge assist — nudge target back when near the curb (kid-friendly)
+  const thAssist = trackHalfAt(player.z, levelData.trackKeys);
+  if (Math.abs(player.x) > thAssist * EDGE_ASSIST_FRAC) {
+    const pull = -Math.sign(player.x) * EDGE_ASSIST * dt;
+    player.targetX += pull;
   }
 
   player.x = lerp(player.x, player.targetX, Math.min(1, dt * STEER_LERP));
@@ -205,7 +225,7 @@ function resolveFrame(dt) {
   player.rollAngle += spd * dt * 2.5;
 
   if (!hasSupport(player.x, player.z, trackHalf, pits)) {
-    beginDead();
+    beginDead(deathReasonAt(player.x, player.z, trackHalf, pits));
     return;
   }
 

@@ -1,23 +1,52 @@
 'use strict';
 
 // ---- Expected-value curve ---------------------------------------------------
+// Designed so the player can climb 2→4→8… with *many* same-value pairs.
+// High teases (you're a 4, track is full of 16s) were the main fun-killer.
 
+/** Soft end-tier for level L (0-based: 0=2, 1=4, …). Kept modest so climb is real. */
+function endTierForLevel(L) {
+  // L1→2 (value 8), L4→3 (16), L8→5 (64), L12→7 (256)
+  return Math.min(8, 1 + Math.floor(L * 0.5));
+}
+
+/**
+ * Expected player value at normalized progress u∈[0,1].
+ * Grows in steps with long plateaus so there is time to find matches.
+ */
 function expectedValue(L, u) {
-  const endTier = Math.min(10, 2 + Math.floor(L * 0.55));
+  const endTier = endTierForLevel(L);
   const startTier = 0;
-  const t = startTier + (endTier - startTier) * smoothstep(u);
+  // Stay low longer: ease-in curve (u^1.35) so first third is mostly 2s/4s
+  const eased = Math.pow(smoothstep(u), 1.35);
+  const t = startTier + (endTier - startTier) * eased;
   return valueForTier(Math.round(t));
 }
 
+/**
+ * Pick a spawn value around the expected tier.
+ * Heavy weight on exact match and one-below (building blocks).
+ * Almost never more than +1 above expected — no unreachable 16s when you're a 4.
+ */
 function pickOrbValue(L, u, rng, tierDelta) {
   const expTier = tierForValue(expectedValue(L, u));
+  // Template tierDelta is soft-clamped: max +1 above expected
+  const deltaReq = clamp(tierDelta || 0, -2, 1);
   const roll = rng();
-  let d = 0;
-  if (roll < 0.25) d = -1;
-  else if (roll < 0.70) d = 0;
-  else if (roll < 0.90) d = 1;
-  else d = 2;
-  return valueForTier(clamp(expTier + d + (tierDelta || 0), 0, 10));
+  let d;
+  if (roll < 0.48) d = 0;         // same as expected — merge now
+  else if (roll < 0.78) d = -1;    // one below — still useful earlier / after demote
+  else if (roll < 0.92) d = 1;     // one above — next goal, not a wall
+  else d = -2;                     // two below — easy pickup
+  const tier = clamp(expTier + d + deltaReq, 0, endTierForLevel(L) + 1);
+  return valueForTier(Math.max(0, tier));
+}
+
+/** Hard cap: orb value may not exceed expected(+1) at its z. */
+function maxValueAt(L, z, finishZ) {
+  const u = clamp(z / Math.max(1, finishZ), 0, 1);
+  const expTier = tierForValue(expectedValue(L, u));
+  return valueForTier(Math.min(10, expTier + 1));
 }
 
 // ---- Templates (exactly 20) -------------------------------------------------
@@ -35,29 +64,34 @@ const TEMPLATES = [
   },
   {
     id: 'straight_orbs',
-    length: 32, minLevel: 1, weight: 8,
+    length: 32, minLevel: 1, weight: 10,
     orbs: [
-      { dx: -1.5, dz: 8, valueMode: 'expected', tierDelta: 0 },
-      { dx: 1.2, dz: 14, valueMode: 'expected', tierDelta: -1 },
-      { dx: 0.0, dz: 20, valueMode: 'expected', tierDelta: 0 },
-      { dx: 2.0, dz: 26, valueMode: 'expected', tierDelta: 1 },
+      // denser, mostly on-curve (no +2 teases)
+      { dx: -1.2, dz: 6, valueMode: 'expected', tierDelta: 0 },
+      { dx: 1.0, dz: 10, valueMode: 'expected', tierDelta: 0 },
+      { dx: 0.0, dz: 14, valueMode: 'expected', tierDelta: -1 },
+      { dx: -0.8, dz: 18, valueMode: 'expected', tierDelta: 0 },
+      { dx: 1.2, dz: 22, valueMode: 'expected', tierDelta: 0 },
+      { dx: 0.3, dz: 27, valueMode: 'expected', tierDelta: 0 },
     ],
     hazards: [],
   },
   {
     id: 'safe_breather',
-    length: 24, minLevel: 1, weight: 6,
+    length: 24, minLevel: 1, weight: 7,
     orbs: [
-      { dx: 0.5, dz: 10, valueMode: 'expected', tierDelta: -1 },
-      { dx: -0.8, dz: 18, valueMode: 'expected', tierDelta: 0 },
+      { dx: 0.4, dz: 8, valueMode: 'expected', tierDelta: 0 },
+      { dx: -0.6, dz: 14, valueMode: 'expected', tierDelta: 0 },
+      { dx: 0.2, dz: 20, valueMode: 'expected', tierDelta: -1 },
     ],
     hazards: [],
   },
   {
     id: 'wide_safe',
-    length: 20, minLevel: 1, weight: 5,
+    length: 20, minLevel: 1, weight: 6,
     orbs: [
-      { dx: 0, dz: 12, valueMode: 'expected', tierDelta: 0 },
+      { dx: 0, dz: 8, valueMode: 'expected', tierDelta: 0 },
+      { dx: 0.5, dz: 15, valueMode: 'expected', tierDelta: 0 },
     ],
     hazards: [],
   },
@@ -238,10 +272,12 @@ const TEMPLATES = [
   {
     id: 'finale_high_tease',
     length: 32, minLevel: 10, weight: 3,
+    // +1 only (was +2 — unreachable teases)
     orbs: [
-      { dx: 0, dz: 8, valueMode: 'expected', tierDelta: 1 },
-      { dx: -1.5, dz: 16, valueMode: 'expected', tierDelta: 2 },
-      { dx: 1.5, dz: 24, valueMode: 'expected', tierDelta: 2 },
+      { dx: 0, dz: 8, valueMode: 'expected', tierDelta: 0 },
+      { dx: -1.2, dz: 14, valueMode: 'expected', tierDelta: 0 },
+      { dx: 1.2, dz: 20, valueMode: 'expected', tierDelta: 1 },
+      { dx: 0, dz: 26, valueMode: 'expected', tierDelta: 0 },
     ],
     hazards: [],
   },
@@ -355,35 +391,108 @@ function sanitizeForLevel(L, orbs, hazards) {
     for (let i = 0; i < drop.length; i++) hazards.splice(drop[i], 1);
   }
 
-  // Guarantee a few center-lane value-2 orbs early so kids can always merge
-  ensureEarlyMerges(L, orbs);
+  // Climb path: clamp teases, inject merge ladder, early 2s
+  // finishZ needed for curve — caller passes via orbs' level context on buildLevel
 }
 
 /**
- * Inject fixed value-2 orbs near center in z∈[10,55] if not enough exist.
- * Mutates orbs array. Deterministic slots (no Math.random).
+ * Demote any orb whose value is more than 1 tier above the curve at its z.
+ * Fixes "I'm a 4 and the whole track is 16s."
+ */
+function clampOrbValuesToCurve(L, orbs, finishZ) {
+  for (let i = 0; i < orbs.length; i++) {
+    const o = orbs[i];
+    const cap = maxValueAt(L, o.z, finishZ);
+    if (o.value > cap) {
+      // Drop to expected at this z (mergeable), not just the cap tease
+      const u = clamp(o.z / Math.max(1, finishZ), 0, 1);
+      o.value = expectedValue(L, u);
+      o.radius = radiusForValue(o.value);
+    }
+  }
+}
+
+/**
+ * Inject a real climb ladder: for each tier 2,4,8… place several center-lane
+ * matches in the z-band where the player should be that size.
+ * This is what makes "get myself to a 16" possible.
+ */
+function injectMergeLadder(L, orbs, finishZ, rng) {
+  const endTier = endTierForLevel(L);
+  let injectId = 0;
+
+  function tooClose(x, z) {
+    for (let i = 0; i < orbs.length; i++) {
+      if (Math.abs(orbs[i].z - z) < 2.2 && Math.abs(orbs[i].x - x) < 1.1) return true;
+    }
+    return false;
+  }
+
+  function tryPlace(x, z, value) {
+    if (z < 8 || z > finishZ - FINISH_PAD - 6) return false;
+    if (tooClose(x, z)) {
+      // nudge sideways
+      x = clamp(x + (rng() < 0.5 ? 0.7 : -0.7), -2.5, 2.5);
+      if (tooClose(x, z)) return false;
+    }
+    orbs.push({
+      id: 'o_ladder_' + (injectId++),
+      x: x,
+      z: z,
+      value: value,
+      radius: radiusForValue(value),
+      consumed: false,
+      ghostUntil: 0,
+    });
+    return true;
+  }
+
+  for (let tier = 0; tier <= endTier; tier++) {
+    const value = valueForTier(tier);
+    // Band where player is expected to collect this value
+    const u0 = tier / (endTier + 1.15);
+    const u1 = (tier + 0.95) / (endTier + 1.15);
+    const z0 = 10 + u0 * (finishZ - 30);
+    const z1 = 10 + u1 * (finishZ - 30);
+    // More pairs early (need several 2+2 and 4+4 to climb)
+    const pairs = tier === 0 ? 5 : (tier === 1 ? 4 : (tier <= 3 ? 3 : 2));
+    for (let p = 0; p < pairs; p++) {
+      const t = (p + 0.5) / pairs;
+      const z = lerp(z0, z1, t);
+      // two matches near center — easy to hit
+      tryPlace(0.15 * (p % 2 === 0 ? 1 : -1), z, value);
+      tryPlace(0.9 * (p % 2 === 0 ? -1 : 1), z + 1.6, value);
+    }
+  }
+}
+
+/**
+ * Inject fixed value-2 orbs near center early. Deterministic slots.
  */
 function ensureEarlyMerges(L, orbs) {
   function countEarlyTwos() {
     let n = 0;
     for (let i = 0; i < orbs.length; i++) {
       const o = orbs[i];
-      if (o.value === 2 && o.z < 55 && Math.abs(o.x) < 1.5) n++;
+      if (o.value === 2 && o.z < 60 && Math.abs(o.x) < 1.8) n++;
     }
     return n;
   }
-  const need = L <= 4 ? 3 : 2;
+  const need = L <= 6 ? 5 : 3;
   const slots = [
-    { x: 0, z: 12 },
-    { x: 0.25, z: 22 },
-    { x: -0.2, z: 34 },
-    { x: 0.1, z: 46 },
+    { x: 0, z: 10 },
+    { x: 0.3, z: 16 },
+    { x: -0.25, z: 24 },
+    { x: 0.15, z: 32 },
+    { x: -0.1, z: 40 },
+    { x: 0.4, z: 48 },
+    { x: -0.35, z: 56 },
   ];
   for (let s = 0; s < slots.length && countEarlyTwos() < need; s++) {
     const slot = slots[s];
     let blocked = false;
     for (let i = 0; i < orbs.length; i++) {
-      if (Math.abs(orbs[i].z - slot.z) < 2.5 && Math.abs(orbs[i].x - slot.x) < 1.0) {
+      if (Math.abs(orbs[i].z - slot.z) < 2.0 && Math.abs(orbs[i].x - slot.x) < 1.0) {
         blocked = true;
         break;
       }
@@ -481,6 +590,16 @@ function buildLevel(L, seed) {
   }
 
   sanitizeForLevel(L, orbs, hazards);
+
+  // Growth path (order matters):
+  // 1) inject ladder pairs along the track
+  // 2) clamp any leftover teases down to the curve
+  // 3) top up early 2s if still thin
+  injectMergeLadder(L, orbs, finishZ, rng);
+  clampOrbValuesToCurve(L, orbs, finishZ);
+  ensureEarlyMerges(L, orbs);
+  // Sort for stable draw / tests
+  orbs.sort(function (a, b) { return a.z - b.z || a.x - b.x; });
 
   return {
     level: L,

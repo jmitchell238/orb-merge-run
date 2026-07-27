@@ -67,9 +67,11 @@ function loadGame() {
       colorForValue, radiusForValue,
       dist2PointSegment, sweptCircleHit, circleHit, isOffRail, hasSupport,
       stripHit, sweptStripHit, softNudge,
-      expectedValue, pickOrbValue, TEMPLATES, TEMPLATES_BY_ID,
+      expectedValue, pickOrbValue, endTierForLevel, maxValueAt,
+      TEMPLATES, TEMPLATES_BY_ID,
       buildLevel, instantiateTemplate, trackHalfAt, pitsOf,
       sanitizeForLevel, buildTrackKeyframes, overlapsTooClose,
+      injectMergeLadder, clampOrbValuesToCurve,
       SAVE_KEY, defaultSave, loadSave, save,
     };
   `;
@@ -282,10 +284,22 @@ for (let L = 1; L <= 12; L++) {
   assert(Date.now() - t0 < 2000, 'buildLevel finishes quickly');
 }
 
-// expected value end tiers
-assertEq(T.expectedValue(1, 1), T.valueForTier(Math.min(10, 2 + Math.floor(1 * 0.55))), 'end L1');
-assertEq(T.expectedValue(12, 1), T.valueForTier(Math.min(10, 2 + Math.floor(12 * 0.55))), 'end L12→512');
-assertEq(T.expectedValue(12, 1), 512, 'L12 end value 512');
+// expected value end tiers (gentler climb curve)
+assertEq(T.expectedValue(1, 1), 4, 'L1 end ≈4');
+assertEq(T.expectedValue(12, 1), 256, 'L12 end ≈256');
+// climb ladder: plenty of 2s and 4s on early/mid track
+{
+  const L5 = T.buildLevel(5, 5 * 10007);
+  const c2 = L5.orbs.filter(o => o.value === 2).length;
+  const c4 = L5.orbs.filter(o => o.value === 4).length;
+  const c8 = L5.orbs.filter(o => o.value === 8).length;
+  assert(c2 >= 6, 'L5 has many 2s for climb (got ' + c2 + ')');
+  assert(c4 >= 4, 'L5 has many 4s for climb (got ' + c4 + ')');
+  assert(c8 >= 2, 'L5 has some 8s for climb (got ' + c8 + ')');
+  // no extreme teases: early track (z< finish*0.25) should not be full of 64+
+  const earlyHigh = L5.orbs.filter(o => o.z < L5.finishZ * 0.25 && o.value >= 32).length;
+  assert(earlyHigh <= 1, 'L5 early track not stacked with 32+ (got ' + earlyHigh + ')');
+}
 
 // trackHalfAt half-open
 {

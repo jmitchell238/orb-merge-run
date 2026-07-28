@@ -405,104 +405,142 @@ function clampOrbValuesToCurve(L, orbs, finishZ) {
 }
 
 /**
- * Progressive climb spine — zigzag lanes, never a center line.
- * Every tier 0..endTier is guaranteed at least once.
+ * Ball Run 2048–style field: DENSE clusters scattered full-width.
+ * Looking down the road you should see many colored balls left/right,
+ * mixed values, with spike strips between groups — not a thin ladder.
+ *
+ * Still guarantees a climb path (enough of each tier 2→…→end).
  */
 function injectMergeLadder(L, orbs, finishZ, rng) {
   const endTier = endTierForLevel(L);
   let injectId = 0;
 
   const climbEnd = finishZ - FINISH_PAD - 4;
-  const climbStart = 12;
-  const span = Math.max(40, climbEnd - climbStart);
-
-  // Wide lane set — force steering between left / mid / right
-  const LANES = [-3.2, -2.0, -0.8, 0.8, 2.0, 3.2];
-  let laneCursor = Math.floor(rng() * LANES.length);
+  const climbStart = 10;
+  // Full track width like the reference screenshot
+  const LANES = [-3.4, -2.5, -1.6, -0.7, 0.7, 1.6, 2.5, 3.4];
 
   function tooClose(x, z, minZ, minX) {
-    minZ = minZ == null ? 2.4 : minZ;
-    minX = minX == null ? 0.95 : minX;
+    minZ = minZ == null ? 1.35 : minZ;
+    minX = minX == null ? 0.85 : minX;
     for (let i = 0; i < orbs.length; i++) {
       if (Math.abs(orbs[i].z - z) < minZ && Math.abs(orbs[i].x - x) < minX) return true;
     }
     return false;
   }
 
-  function nextLane() {
-    // Jump 2–3 lanes so consecutive orbs are clearly offset
-    laneCursor = (laneCursor + 2 + Math.floor(rng() * 2)) % LANES.length;
-    return LANES[laneCursor];
-  }
-
-  function forcePlace(x, z, value) {
-    const attempts = [
-      [x, z],
-      [x + 0.9, z],
-      [x - 0.9, z],
-      [nextLane(), z],
-      [x, z + 1.8],
-      [x, z - 1.4],
-      [nextLane(), z + 2.4],
-    ];
-    for (let a = 0; a < attempts.length; a++) {
-      const px = clamp(attempts[a][0], -3.4, 3.4);
-      const pz = clamp(attempts[a][1], climbStart, climbEnd);
-      if (!tooClose(px, pz, 2.0, 0.85)) {
-        orbs.push(makeOrb('o_ladder_' + (injectId++), px, pz, value));
-        return true;
+  function place(x, z, value) {
+    x = clamp(x, -3.6, 3.6);
+    z = clamp(z, climbStart, climbEnd);
+    if (tooClose(x, z, 1.2, 0.8)) {
+      x = clamp(x + (rng() < 0.5 ? 0.9 : -0.9), -3.6, 3.6);
+      if (tooClose(x, z, 1.15, 0.75)) {
+        z = clamp(z + 1.1, climbStart, climbEnd);
+        if (tooClose(x, z, 1.1, 0.7)) return false;
       }
     }
-    orbs.push(makeOrb('o_ladder_' + (injectId++), clamp(x, -3.2, 3.2), clamp(z, climbStart, climbEnd), value));
+    orbs.push(makeOrb('o_field_' + (injectId++), x, z, value));
     return true;
   }
 
+  // Shuffle helper (deterministic via rng)
+  function pickLanes(n) {
+    const pool = LANES.slice();
+    for (let i = pool.length - 1; i > 0; i--) {
+      const j = Math.floor(rng() * (i + 1));
+      const tmp = pool[i]; pool[i] = pool[j]; pool[j] = tmp;
+    }
+    return pool.slice(0, Math.min(n, pool.length));
+  }
+
+  // --- Dense cluster beats along the road (Ball Run look) ---
+  // ~ every 8–12 units: a pack of 3–6 balls across the width
+  let z = climbStart;
+  let beat = 0;
+  while (z < climbEnd - 4) {
+    const u = clamp((z - climbStart) / Math.max(1, climbEnd - climbStart), 0, 1);
+    const expTier = tierForValue(expectedValue(L, u));
+
+    // Cluster size: denser mid-field like the screenshot
+    const clusterN = 3 + Math.floor(rng() * 4); // 3–6
+    const lanes = pickLanes(clusterN);
+
+    for (let i = 0; i < clusterN; i++) {
+      // Value mix: mostly on-curve, some −1 building blocks, some +1 teases
+      // (so the road shows many colors at once like Ball Run)
+      let tier;
+      const roll = rng();
+      if (i === 0) {
+        // Anchor match for the current expected size
+        tier = expTier;
+      } else if (roll < 0.28) {
+        tier = Math.max(0, expTier - 1);
+      } else if (roll < 0.48) {
+        tier = Math.min(endTier, expTier + 1); // forward tease
+      } else if (roll < 0.58 && expTier >= 2) {
+        tier = Math.max(0, expTier - 2);
+      } else {
+        tier = expTier;
+      }
+      // Slight z scatter inside the cluster (not a flat row)
+      const oz = z + (rng() - 0.5) * 3.2 + (i - clusterN * 0.5) * 0.55;
+      const ox = lanes[i] + (rng() - 0.5) * 0.35;
+      place(ox, oz, valueForTier(tier));
+    }
+
+    // Advance to next pack — tight enough to see many balls ahead
+    z += 8 + rng() * 5;
+    beat++;
+  }
+
+  // --- Guarantee climb ladder (enough of each tier to actually grow) ---
+  // Overlay dedicated matches so soft-lock is rare even if packs miss
+  const span = climbEnd - climbStart;
   for (let tier = 0; tier <= endTier; tier++) {
     const value = valueForTier(tier);
-    const u0 = tier / (endTier + 1.05);
-    const u1 = (tier + 0.9) / (endTier + 1.05);
+    const u0 = tier / (endTier + 1.1);
+    const u1 = (tier + 0.85) / (endTier + 1.1);
     const z0 = climbStart + u0 * span;
     const z1 = climbStart + u1 * span;
-
-    let count;
-    if (tier <= 1) count = 3;
-    else if (tier <= 4) count = 2;
-    else count = 2;
-
-    for (let p = 0; p < count; p++) {
-      const t = (p + 0.4) / Math.max(1, count);
-      const z = lerp(z0, z1, t);
-      // zig-zag across the full track width
-      const x = nextLane() + (rng() - 0.5) * 0.35;
-      forcePlace(x, z, value);
+    // More copies early (2→4→8), still several later
+    const copies = tier <= 1 ? 4 : (tier <= 4 ? 3 : 2);
+    for (let c = 0; c < copies; c++) {
+      const t = (c + 0.35) / copies;
+      const zz = lerp(z0, z1, t);
+      // Alternate far left / far right / mid so layout stays wide
+      const laneIdx = (tier * 3 + c * 2) % LANES.length;
+      place(LANES[laneIdx] + (rng() - 0.5) * 0.25, zz, value);
     }
   }
 }
 
 /**
- * Guaranteed early 2s in a zigzag — not stacked on center.
+ * Extra early 2s near the start so the first merges always exist.
  */
 function ensureEarlyMerges(L, orbs) {
   function countEarlyTwos() {
     let n = 0;
     for (let i = 0; i < orbs.length; i++) {
-      const o = orbs[i];
-      if (o.value === 2 && o.z < 60) n++;
+      if (orbs[i].value === 2 && orbs[i].z < 50) n++;
     }
     return n;
   }
-  const need = 3;
+  const need = 5;
   const slots = [
-    { x: -2.6, z: 12 },
-    { x: 2.8, z: 24 },
-    { x: -2.2, z: 38 },
-    { x: 2.4, z: 50 },
+    { x: -2.8, z: 11 },
+    { x: 2.6, z: 14 },
+    { x: -1.4, z: 19 },
+    { x: 1.8, z: 23 },
+    { x: -3.0, z: 28 },
+    { x: 0.9, z: 32 },
+    { x: 3.1, z: 38 },
+    { x: -2.2, z: 44 },
   ];
   for (let s = 0; s < slots.length && countEarlyTwos() < need; s++) {
     const slot = slots[s];
     let blocked = false;
     for (let i = 0; i < orbs.length; i++) {
-      if (Math.abs(orbs[i].z - slot.z) < 2.5 && Math.abs(orbs[i].x - slot.x) < 1.1) {
+      if (Math.abs(orbs[i].z - slot.z) < 1.6 && Math.abs(orbs[i].x - slot.x) < 0.95) {
         blocked = true;
         break;
       }
@@ -513,62 +551,87 @@ function ensureEarlyMerges(L, orbs) {
 }
 
 /**
- * Extra hazard gauntlet between merge beats so the road isn't empty.
- * Staggered side thorns + partial pits — always leave a clear dodge lane.
+ * Spike strips like Ball Run — often BOTH sides with a center lane open,
+ * placed between ball packs. Plus occasional pits on higher levels.
  */
 function injectObstacleCourse(L, hazards, finishZ, rng) {
-  const start = L <= 1 ? 36 : 28;
+  const start = 22;
   const end = finishZ - FINISH_PAD - 8;
   if (end <= start + 10) return;
 
-  let z = start + rng() * 6;
-  let side = rng() < 0.5 ? 1 : -1;
+  let z = start + rng() * 4;
   let hid = 0;
-  const spacing = L <= 2 ? 22 : (L <= 5 ? 18 : 15);
+  // Dense enough to show up between orb clusters (screenshot cadence)
+  const spacing = L <= 2 ? 14 : (L <= 5 ? 12 : 10);
 
   while (z < end) {
-    // Side thorn — leave ~half the road open
-    const openLeft = side < 0;
-    hazards.push({
-      id: 'obs_t_' + (hid++),
-      type: 'thorn',
-      x0: openLeft ? 0.8 : -4.5,
-      x1: openLeft ? 4.5 : -0.8,
-      z: z,
-      depth: 1.0,
-      consumed: false,
-    });
+    const pattern = rng();
 
-    // Occasional opposite-side pit (L2+) so you weave
-    if (L >= 2 && rng() < 0.55) {
-      const pitZ = z + 6 + rng() * 4;
+    if (pattern < 0.45) {
+      // Dual side spikes (center open) — classic Ball Run look
+      hazards.push({
+        id: 'obs_t_' + (hid++),
+        type: 'thorn',
+        x0: -4.5, x1: -1.5,
+        z: z, depth: 1.0, consumed: false,
+      });
+      hazards.push({
+        id: 'obs_t_' + (hid++),
+        type: 'thorn',
+        x0: 1.5, x1: 4.5,
+        z: z, depth: 1.0, consumed: false,
+      });
+    } else if (pattern < 0.7) {
+      // One side only
+      const left = rng() < 0.5;
+      hazards.push({
+        id: 'obs_t_' + (hid++),
+        type: 'thorn',
+        x0: left ? -4.5 : 0.9,
+        x1: left ? -0.9 : 4.5,
+        z: z, depth: 1.05, consumed: false,
+      });
+    } else if (pattern < 0.88) {
+      // Staggered pair at two z depths
+      hazards.push({
+        id: 'obs_t_' + (hid++),
+        type: 'thorn',
+        x0: -4.5, x1: -1.3,
+        z: z, depth: 1.0, consumed: false,
+      });
+      hazards.push({
+        id: 'obs_t_' + (hid++),
+        type: 'thorn',
+        x0: 1.3, x1: 4.5,
+        z: z + 5, depth: 1.0, consumed: false,
+      });
+    } else {
+      // Thin center spikes — dodge left or right
+      hazards.push({
+        id: 'obs_t_' + (hid++),
+        type: 'thorn',
+        x0: -1.15, x1: 1.15,
+        z: z, depth: 0.95, consumed: false,
+      });
+    }
+
+    // Pits start L2, more common later
+    if (L >= 2 && rng() < (L <= 3 ? 0.28 : 0.42)) {
+      const pitZ = z + 3 + rng() * 3;
       if (pitZ < end) {
+        const left = rng() < 0.5;
         hazards.push({
           id: 'obs_p_' + (hid++),
           type: 'pit',
-          x0: openLeft ? -5 : 0.5,
-          x1: openLeft ? -0.5 : 5,
+          x0: left ? -5 : 0.45,
+          x1: left ? -0.45 : 5,
           z0: pitZ,
-          z1: pitZ + 5 + rng() * 2,
+          z1: pitZ + 4.5 + rng() * 2.5,
         });
       }
     }
 
-    // Occasional center squeeze thorn (L3+) — thin strip, dodgeable
-    if (L >= 3 && rng() < 0.35) {
-      hazards.push({
-        id: 'obs_c_' + (hid++),
-        type: 'thorn',
-        x0: -1.1,
-        x1: 1.1,
-        z: z + 11,
-        depth: 0.9,
-        consumed: false,
-      });
-    }
-
-    z += spacing + rng() * 8;
-    side *= -1;
+    z += spacing + rng() * 5;
   }
 }
 
@@ -643,48 +706,42 @@ function buildLevel(L, seed) {
   const finishZ = finishZForLevel(L);
   const orbs = [];
   const hazards = [];
-  let z = 8;
   const segmentsUsed = [];
 
-  // Pack templates up to just before the checkered finish
-  const packEnd = finishZ - FINISH_PAD - 8;
-
-  if (L <= 2) {
-    const intro = instantiateTemplate(TEMPLATES_BY_ID.merge_lane_intro, z, L, rng);
-    appendInst(intro, orbs, hazards, segmentsUsed);
-    z += intro.length + 6;
-  }
-
+  // Light template seasoning for track-width changes / set pieces,
+  // but the MAIN density comes from injectMergeLadder (Ball Run field).
+  let z = 40;
+  const packEnd = finishZ - FINISH_PAD - 20;
   let stallGuard = 0;
-  while (z < packEnd) {
+  let placed = 0;
+  while (z < packEnd && placed < 6) {
     const remaining = packEnd - z;
     const eligible = TEMPLATES.filter(function (t) {
-      // Prefer breathers / sparse templates; skip dense_mix early
-      if (t.id === 'merge_lane_intro') return false;
-      return t.minLevel <= L && t.length <= remaining;
+      if (t.id === 'merge_lane_intro' || t.id === 'safe_breather' || t.id === 'wide_safe') {
+        return false;
+      }
+      // Prefer hazard / shape templates — orbs come from the field injector
+      return t.minLevel <= L && t.length <= remaining && t.hazards && t.hazards.length > 0;
     });
     if (eligible.length === 0) break;
 
     const t = weightedPick(eligible, rng);
+    // Instantiate but strip template orbs — field injector owns density/layout
     const inst = instantiateTemplate(t, z, L, rng);
-    if (overlapsTooClose(inst, orbs, hazards, 3.5)) {
-      z += 4;
+    inst.orbs = [];
+    if (overlapsTooClose(inst, orbs, hazards, 2.5)) {
+      z += 5;
       stallGuard++;
-      if (stallGuard > 40) break;
+      if (stallGuard > 30) break;
       continue;
     }
     stallGuard = 0;
     appendInst(inst, orbs, hazards, segmentsUsed);
-    // Tighter segment packing — more stuff to steer through
-    z += t.length + lerp(2, 5, rng());
+    z += t.length + lerp(8, 16, rng());
+    placed++;
   }
 
-  // Growth path + spice:
-  // 1) progressive zigzag ladder
-  // 2) obstacle gauntlet (thorns / pits between beats)
-  // 3) clamp teases / early 2s
-  // 4) sanitize caps
-  // 5) post-finish multiplier walls (Crowd Runner style)
+  // Primary content: dense full-width Ball Run field + spikes + climb guarantee
   injectMergeLadder(L, orbs, finishZ, rng);
   injectObstacleCourse(L, hazards, finishZ, rng);
   clampOrbValuesToCurve(L, orbs, finishZ);

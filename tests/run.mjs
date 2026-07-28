@@ -301,16 +301,20 @@ assert(L1a.orbs.length >= 3, 'L1 has orbs');
   // no hole-style bonus hazards
   assert(L1a.hazards.every(h => h.type !== 'bonus'), 'no bonus pit hazards');
 }
-// not a wall of orbs
+// Ball Run density: many orbs, full-width scatter (not a thin line of 20)
 {
-  assert(L1a.orbs.length <= 55, 'L1 sparse-ish orb count (got ' + L1a.orbs.length + ')');
+  assert(L1a.orbs.length >= 45, 'L1 dense field (got ' + L1a.orbs.length + ')');
+  assert(L1a.orbs.length <= 140, 'L1 not absurdly dense (got ' + L1a.orbs.length + ')');
+  // several orbs visible per stretch of track
+  const mid = L1a.orbs.filter(o => o.z > 40 && o.z < 100).length;
+  assert(mid >= 12, 'L1 mid-track has a pack of balls (got ' + mid + ')');
 }
 // thorn cap (higher now — still capped)
 {
   const L9 = T.buildLevel(9, 9 * 10007);
   const thorns = L9.hazards.filter(h => h.type === 'thorn').length;
-  assert(thorns <= 12, 'L9 thorn cap ≤12 (got ' + thorns + ')');
-  assert(thorns >= 4, 'L9 has real thorn count (got ' + thorns + ')');
+  assert(thorns <= 26, 'L9 thorn cap ≤26 (got ' + thorns + ')');
+  assert(thorns >= 6, 'L9 has real thorn count (got ' + thorns + ')');
 }
 
 const L2 = T.buildLevel(2, 20014);
@@ -357,20 +361,18 @@ assertEq(T.expectedValue(12, 1), 2048, 'L12 end ≈2048');
   assert(c4 >= 2, 'L5 has climb 4s (got ' + c4 + ')');
   assert(c8 >= 1, 'L5 has climb 8s (got ' + c8 + ')');
   assert(c16 >= 1, 'L5 has climb 16s (got ' + c16 + ')');
-  // sparse total
-  assert(L5.orbs.length <= 70, 'L5 not orb-dense (got ' + L5.orbs.length + ')');
-  // no extreme teases early
-  const earlyHigh = L5.orbs.filter(o => o.z < L5.finishZ * 0.2 && o.value >= 64).length;
-  assert(earlyHigh <= 1, 'L5 early track not stacked with 64+ (got ' + earlyHigh + ')');
+  assert(L5.orbs.length >= 50, 'L5 dense field (got ' + L5.orbs.length + ')');
+  // early track shouldn't be nothing but 256s
+  const earlyHigh = L5.orbs.filter(o => o.z < L5.finishZ * 0.15 && o.value >= 128).length;
+  assert(earlyHigh <= 3, 'L5 early track not stacked with 128+ (got ' + earlyHigh + ')');
 }
 // L1 full ladder through 256+ so 512 is reachable
 {
   const L1 = T.buildLevel(1, 10007);
   for (const v of [2, 4, 8, 16, 32, 64, 128, 256, 512]) {
     const n = L1.orbs.filter(o => o.value === v).length;
-    assert(n >= 1, 'L1 ladder has ' + v + ' (got ' + n + ')');
+    assert(n >= 2, 'L1 ladder has ' + v + ' (got ' + n + ')');
   }
-  assert(L1.orbs.length <= 45, 'L1 still sparse (got ' + L1.orbs.length + ')');
 }
 
 // bonus walls helper

@@ -324,9 +324,70 @@ function drawFinish(finishZ, zn, zf) {
 }
 
 /**
- * Draw a glossy numbered orb that actually looks like it spins.
- * Beach-ball gores rotate with rollAngle (no scanline stripes).
- * Number stays upright for readability.
+ * Number stamped on the sphere surface (Ball Run style).
+ * Rolls with the ball: climbs over the top, disappears behind, comes around again.
+ * Local coords: +X right, +Y up, +Z toward camera. Rest pose = front (0,0,1).
+ */
+function drawStampedNumber(sx, sy, r, value, roll, yaw) {
+  const label = formatValueLabel(value);
+
+  // Rest stamp on front; roll around X (forward), then yaw around Y (steer/knock)
+  const cR = Math.cos(roll);
+  const sR = Math.sin(roll);
+  const cY = Math.cos(yaw);
+  const sY = Math.sin(yaw);
+
+  // (0,0,1) → roll X → (0, -sR, cR) → yaw Y → …
+  const lx = cR * sY;
+  const ly = -sR;
+  const lz = cR * cY; // >0 = front hemisphere (visible)
+
+  // Behind the ball — fully hidden (stamped paint, not a HUD billboard)
+  if (lz <= 0.04) return;
+
+  const px = sx + lx * r * 0.93;
+  const py = sy - ly * r * 0.93; // screen Y is down
+
+  // Flat sticker foreshortening on a sphere
+  const face = lz;
+  const scaleX = Math.max(0.14, Math.abs(cY) * 0.25 + face * 0.75);
+  const scaleY = Math.max(0.12, face);
+
+  // Local "up" of the stamp after the same rotations → screen rotation
+  // Rest up (0,1,0) → roll X: (0, cR, sR) → yaw Y: (sR*sY, cR, sR*cY)
+  const upX = sR * sY;
+  const upY = cR;
+  // screen up is -Y; angle of painted up in screen space
+  const textRot = Math.atan2(upX, upY);
+
+  const fontSize = Math.max(10, r * (label.length > 3 ? 0.72 : 0.98));
+
+  ctx.save();
+  // Clip to ball so the number wraps off the limb cleanly
+  ctx.beginPath();
+  ctx.arc(sx, sy, r * 0.99, 0, Math.PI * 2);
+  ctx.clip();
+
+  ctx.translate(px, py);
+  ctx.rotate(textRot);
+  ctx.scale(scaleX, scaleY);
+
+  // Fade near the silhouette so it “slides over” instead of popping
+  ctx.globalAlpha = clamp(0.25 + face * 0.75, 0, 1);
+  ctx.font = '900 ' + fontSize + 'px system-ui,Segoe UI,sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.lineWidth = Math.max(2, fontSize * 0.2);
+  ctx.strokeStyle = 'rgba(0,0,0,0.6)';
+  ctx.strokeText(label, 0, 0);
+  ctx.fillStyle = '#fff';
+  ctx.fillText(label, 0, 0);
+  ctx.restore();
+}
+
+/**
+ * Draw a glossy numbered orb that spins like Ball Run 2048.
+ * Beach-ball gores + number stamped on the surface (rolls over & behind).
  */
 function drawOrbAt(x, y, z, value, radius, opts) {
   opts = opts || {};
@@ -365,7 +426,7 @@ function drawOrbAt(x, y, z, value, radius, opts) {
   ctx.arc(sx, sy, r, 0, Math.PI * 2);
   ctx.fill();
 
-  // Spinning beach-ball gores (this is the roll read — panels turn, not scanlines)
+  // Spinning beach-ball gores
   if (r >= 5) {
     ctx.save();
     ctx.beginPath();
@@ -392,7 +453,6 @@ function drawOrbAt(x, y, z, value, radius, opts) {
     }
     ctx.globalAlpha = 1;
 
-    // Seam lines between panels (reads as a real ball spinning)
     ctx.strokeStyle = 'rgba(0,0,0,0.18)';
     ctx.lineWidth = Math.max(1, r * 0.035);
     for (let i = 0; i < panels; i++) {
@@ -403,7 +463,6 @@ function drawOrbAt(x, y, z, value, radius, opts) {
       ctx.stroke();
     }
 
-    // Soft “equator” oval that drifts with roll — one thick band, not many thin lines
     const tilt = spin * 0.5;
     ctx.strokeStyle = 'rgba(255,255,255,0.28)';
     ctx.lineWidth = Math.max(1.5, r * 0.09);
@@ -422,13 +481,16 @@ function drawOrbAt(x, y, z, value, radius, opts) {
     ctx.restore();
   }
 
+  // Number UNDER the lighting so it looks painted into the surface
+  drawStampedNumber(sx, sy, r, value, roll, yaw);
+
   // Spherical shading overlay (fixed light, keeps it looking round)
   const shade = ctx.createRadialGradient(
     sx - r * 0.32, sy - r * 0.38, r * 0.05,
     sx, sy, r
   );
-  shade.addColorStop(0, 'rgba(255,255,255,0.55)');
-  shade.addColorStop(0.28, 'rgba(255,255,255,0.12)');
+  shade.addColorStop(0, 'rgba(255,255,255,0.45)');
+  shade.addColorStop(0.28, 'rgba(255,255,255,0.1)');
   shade.addColorStop(0.7, 'rgba(0,0,0,0)');
   shade.addColorStop(1, 'rgba(0,0,0,0.35)');
   ctx.fillStyle = shade;
@@ -436,12 +498,12 @@ function drawOrbAt(x, y, z, value, radius, opts) {
   ctx.arc(sx, sy, r, 0, Math.PI * 2);
   ctx.fill();
 
-  // Specular hot-spot (orbits slightly with spin)
+  // Specular hot-spot
   const hx = sx - r * 0.28 + Math.cos(roll * 0.7) * r * 0.06;
   const hy = sy - r * 0.32 + Math.sin(roll * 0.7) * r * 0.05;
   const spec = ctx.createRadialGradient(hx, hy, 0, hx, hy, r * 0.28);
-  spec.addColorStop(0, 'rgba(255,255,255,0.85)');
-  spec.addColorStop(0.45, 'rgba(255,255,255,0.2)');
+  spec.addColorStop(0, 'rgba(255,255,255,0.75)');
+  spec.addColorStop(0.45, 'rgba(255,255,255,0.15)');
   spec.addColorStop(1, 'rgba(255,255,255,0)');
   ctx.fillStyle = spec;
   ctx.beginPath();
@@ -456,18 +518,6 @@ function drawOrbAt(x, y, z, value, radius, opts) {
   ctx.arc(sx, sy, r, 0, Math.PI * 2);
   ctx.stroke();
   ctx.globalAlpha = 1;
-
-  // number stays upright for readability
-  const label = formatValueLabel(value);
-  const fontSize = Math.max(10, r * (label.length > 3 ? 0.7 : 0.95));
-  ctx.font = '900 ' + fontSize + 'px system-ui,Segoe UI,sans-serif';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.lineWidth = Math.max(2, fontSize * 0.18);
-  ctx.strokeStyle = 'rgba(0,0,0,0.55)';
-  ctx.strokeText(label, sx, sy + 1);
-  ctx.fillStyle = '#fff';
-  ctx.fillText(label, sx, sy + 1);
 
   if (opts.debugHit) {
     ctx.strokeStyle = 'rgba(255,80,80,0.6)';

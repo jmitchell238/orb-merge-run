@@ -3,7 +3,7 @@
 
 // ---- Version (MAJOR.MINOR.PATCH) --------------------------------------------
 // Keep CACHE in sw.js in sync: 'orb-merge-run-' + GAME_VERSION
-const GAME_VERSION = '1.2.008';
+const GAME_VERSION = '1.2.009';
 const GAME_VERSION_LABEL = 'v' + GAME_VERSION;
 const GAME_NAME = 'Orb Merge Run';
 
@@ -46,8 +46,8 @@ const ROLL_RATE = 0.38;
 // Flipbook frames baked per orb value (sprite swap)
 const ROLL_FRAMES = 20;
 const ROLL_SPRITE_RES = 160;
-// -1 = number rolls under the ball as you move forward (Ball Run feel)
-const ROLL_DIR = -1;
+// +1 = number rises bottom → top as the ball rolls forward (correct roll sense)
+const ROLL_DIR = 1;
 const MAX_CHAIN = 4;
 
 // Thorns

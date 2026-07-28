@@ -463,8 +463,8 @@ function orbCacheKey(value) {
 }
 
 function getOrbFrames(value) {
-  // Bump key when stamp orientation changes so caches rebuild
-  const key = orbCacheKey(value) + '_upright1';
+  // Bump key when stamp direction changes so caches rebuild
+  const key = orbCacheKey(value) + '_dir' + (typeof ROLL_DIR === 'number' ? ROLL_DIR : 1);
   if (orbFrameCache[key]) return orbFrameCache[key];
 
   const col = colorForValue(value);
@@ -474,8 +474,8 @@ function getOrbFrames(value) {
   const n = ROLL_FRAMES;
   const frames = new Array(n);
   // Frame 0 = number on front, upright.
-  // Later frames: stamp slides under (dir=-1) then around; always upright text.
-  const dir = (typeof ROLL_DIR === 'number' ? ROLL_DIR : -1);
+  // ROLL_DIR +1: later frames slide stamp bottom → top (correct forward roll).
+  const dir = (typeof ROLL_DIR === 'number' ? ROLL_DIR : 1);
   for (let i = 0; i < n; i++) {
     const roll = dir * (i / n) * Math.PI * 2;
     let f = fill;

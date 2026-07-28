@@ -36,7 +36,7 @@ function isOffRail(x, trackHalf) {
 }
 
 /**
- * Support rule: on rail and not over a pit or bonus-well opening.
+ * Support rule: on rail and not over a pit opening.
  */
 function hasSupport(x, z, trackHalf, pits) {
   if (isOffRail(x, trackHalf)) return false;
@@ -47,18 +47,6 @@ function hasSupport(x, z, trackHalf, pits) {
     if (x >= p.x0 && x <= p.x1) return false;
   }
   return true;
-}
-
-/** Find bonus well under (x,z), or null. */
-function bonusWellAt(x, z, bonuses) {
-  if (!bonuses) return null;
-  for (let i = 0; i < bonuses.length; i++) {
-    const b = bonuses[i];
-    if (b.claimed) continue;
-    if (z < b.z0 || z > b.z1) continue;
-    if (x >= b.x0 && x <= b.x1) return b;
-  }
-  return null;
 }
 
 function stripHit(px, pz, pHitR, x0, x1, z0, depth) {

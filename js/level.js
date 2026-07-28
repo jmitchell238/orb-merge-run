@@ -351,14 +351,10 @@ function overlapsTooClose(inst, orbs, hazards, minSep) {
   }
   for (let i = 0; i < inst.hazards.length; i++) {
     const h = inst.hazards[i];
-    const hz = h.type === 'pit' || h.type === 'bonus'
-      ? (h.z0 + h.z1) / 2
-      : h.z;
+    const hz = h.type === 'pit' ? (h.z0 + h.z1) / 2 : h.z;
     for (let j = 0; j < hazards.length; j++) {
       const e = hazards[j];
-      const ez = e.type === 'pit' || e.type === 'bonus'
-        ? (e.z0 + e.z1) / 2
-        : e.z;
+      const ez = e.type === 'pit' ? (e.z0 + e.z1) / 2 : e.z;
       if (Math.abs(hz - ez) < minSep) return true;
     }
     if (h.type === 'pit') {
@@ -372,7 +368,6 @@ function overlapsTooClose(inst, orbs, hazards, minSep) {
 function sanitizeForLevel(L, orbs, hazards) {
   for (let i = hazards.length - 1; i >= 0; i--) {
     const h = hazards[i];
-    if (h.type === 'bonus') continue;
     // L1: thorns ok after intro, no pits yet
     if (L <= 1 && h.type === 'pit') { hazards.splice(i, 1); continue; }
     if (L <= 1 && h.type === 'thorn' && h.z < 28) { hazards.splice(i, 1); continue; }
@@ -417,7 +412,7 @@ function injectMergeLadder(L, orbs, finishZ, rng) {
   const endTier = endTierForLevel(L);
   let injectId = 0;
 
-  const climbEnd = finishZ - FINISH_PAD - BONUS_ZONE_LEN - 4;
+  const climbEnd = finishZ - FINISH_PAD - 4;
   const climbStart = 12;
   const span = Math.max(40, climbEnd - climbStart);
 
@@ -523,7 +518,7 @@ function ensureEarlyMerges(L, orbs) {
  */
 function injectObstacleCourse(L, hazards, finishZ, rng) {
   const start = L <= 1 ? 36 : 28;
-  const end = finishZ - FINISH_PAD - BONUS_ZONE_LEN - 8;
+  const end = finishZ - FINISH_PAD - 8;
   if (end <= start + 10) return;
 
   let z = start + rng() * 6;
@@ -578,54 +573,26 @@ function injectObstacleCourse(L, hazards, finishZ, rng) {
 }
 
 /**
- * End-of-run bonus wells — fall in with big enough value for coins + win.
- * Smaller balls that fall in die (hole too deep for them).
- * Solid track remains between wells so you can also finish normally.
+ * Post-finish bonus walls (Crowd Clash Runner style).
+ * Smash through if ball value ≥ need → raise coin multiplier.
+ * Stop when you hit a wall too big for you (or clear all of them).
  */
-function injectBonusFinale(L, hazards, finishZ) {
+function buildBonusWalls(L, finishZ) {
   const endTier = endTierForLevel(L);
-  // Wells from mid climb target up to end tier
-  const minTier = Math.max(2, endTier - 4); // start at 8+
-  const wellDefs = [];
-  for (let t = minTier; t <= endTier; t++) {
-    const value = valueForTier(t);
-    // coins scale with target
-    const coins = 12 + t * 18;
-    wellDefs.push({ minValue: value, coins: coins });
-  }
-  // Cap wells to keep readable (max 5)
-  while (wellDefs.length > 5) wellDefs.shift();
-
-  const zoneStart = finishZ - FINISH_PAD - BONUS_ZONE_LEN;
-  const wellDepth = 3.2;
-  const gap = 0.55;
-  const n = wellDefs.length;
-  if (n === 0) return;
-
-  // Lay wells as side-by-side lanes across the track (Ball Run style)
-  // Leave thin solid strips between them so you can choose / skip.
-  const usable = TRACK_W - 1.2; // keep outer ledges
-  const laneW = usable / n;
-  const xLeft = -TRACK_HALF + 0.6;
-
-  for (let i = 0; i < n; i++) {
-    const def = wellDefs[i];
-    const x0 = xLeft + i * laneW + gap * 0.5;
-    const x1 = xLeft + (i + 1) * laneW - gap * 0.5;
-    const z0 = zoneStart + 4;
-    const z1 = z0 + wellDepth;
-    hazards.push({
-      id: 'bonus_' + i,
-      type: 'bonus',
-      x0: x0,
-      x1: x1,
-      z0: z0,
-      z1: z1,
-      minValue: def.minValue,
-      coins: def.coins,
-      claimed: false,
+  // First wall is a few tiers below the level's end value; last ≈ end value
+  const startTier = Math.max(2, endTier - (BONUS_WALL_MULTS.length - 1));
+  const walls = [];
+  for (let i = 0; i < BONUS_WALL_MULTS.length; i++) {
+    const tier = Math.min(10, startTier + i);
+    walls.push({
+      id: 'bw_' + i,
+      z: finishZ + BONUS_WALL_START + i * BONUS_WALL_SPACING,
+      need: valueForTier(tier),
+      mult: BONUS_WALL_MULTS[i],
+      broken: false,
     });
   }
+  return walls;
 }
 
 function buildTrackKeyframes(segmentsUsed) {
@@ -679,8 +646,8 @@ function buildLevel(L, seed) {
   let z = 8;
   const segmentsUsed = [];
 
-  // Pack templates only up to the pre-bonus zone — leave room for climb spine + wells
-  const packEnd = finishZ - FINISH_PAD - BONUS_ZONE_LEN - 8;
+  // Pack templates up to just before the checkered finish
+  const packEnd = finishZ - FINISH_PAD - 8;
 
   if (L <= 2) {
     const intro = instantiateTemplate(TEMPLATES_BY_ID.merge_lane_intro, z, L, rng);
@@ -717,13 +684,15 @@ function buildLevel(L, seed) {
   // 2) obstacle gauntlet (thorns / pits between beats)
   // 3) clamp teases / early 2s
   // 4) sanitize caps
-  // 5) bonus wells
+  // 5) post-finish multiplier walls (Crowd Runner style)
   injectMergeLadder(L, orbs, finishZ, rng);
   injectObstacleCourse(L, hazards, finishZ, rng);
   clampOrbValuesToCurve(L, orbs, finishZ);
   ensureEarlyMerges(L, orbs);
   sanitizeForLevel(L, orbs, hazards);
-  injectBonusFinale(L, hazards, finishZ);
+
+  const bonusWalls = buildBonusWalls(L, finishZ);
+  const bonusEndZ = bonusEndZForLevel(finishZ);
 
   orbs.sort(function (a, b) { return a.z - b.z || a.x - b.x; });
 
@@ -731,6 +700,8 @@ function buildLevel(L, seed) {
     level: L,
     seed: seed,
     finishZ: finishZ,
+    bonusWalls: bonusWalls,
+    bonusEndZ: bonusEndZ,
     trackHalfDefault: TRACK_HALF,
     trackKeys: buildTrackKeyframes(segmentsUsed),
     orbs: orbs,
@@ -742,17 +713,7 @@ function buildLevel(L, seed) {
 function pitsOf(levelData) {
   const out = [];
   for (let i = 0; i < levelData.hazards.length; i++) {
-    const h = levelData.hazards[i];
-    // Bonus wells also remove support (you can fall in)
-    if (h.type === 'pit' || h.type === 'bonus') out.push(h);
-  }
-  return out;
-}
-
-function bonusesOf(levelData) {
-  const out = [];
-  for (let i = 0; i < levelData.hazards.length; i++) {
-    if (levelData.hazards[i].type === 'bonus') out.push(levelData.hazards[i]);
+    if (levelData.hazards[i].type === 'pit') out.push(levelData.hazards[i]);
   }
   return out;
 }

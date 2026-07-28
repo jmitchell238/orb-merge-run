@@ -204,33 +204,28 @@ function drawPits(levelData, zn, zf) {
   }
 }
 
-/** End-run bonus wells — glowing pits labeled with min value. */
-function drawBonusWells(levelData, zn, zf) {
-  if (!levelData) return;
-  for (let i = 0; i < levelData.hazards.length; i++) {
-    const p = levelData.hazards[i];
-    if (p.type !== 'bonus') continue;
-    if (p.z1 < zn || p.z0 > zf) continue;
+/**
+ * Post-finish bonus walls — Crowd Clash Runner style.
+ * Gold wall across the track: "xN" mult + "need V" value threshold.
+ */
+function drawBonusWalls(levelData, zn, zf, playerVal) {
+  if (!levelData || !levelData.bonusWalls) return;
+  const hw = TRACK_HALF - 0.25;
+  const hWall = 3.4;
 
-    const a = project(p.x0, -0.08, p.z0);
-    const b = project(p.x1, -0.08, p.z0);
-    const c = project(p.x1, -0.08, p.z1);
-    const d = project(p.x0, -0.08, p.z1);
+  for (let i = 0; i < levelData.bonusWalls.length; i++) {
+    const w = levelData.bonusWalls[i];
+    if (w.broken) continue;
+    if (w.z < zn - 2 || w.z > zf + 2) continue;
+
+    const a = project(-hw, 0, w.z);
+    const b = project(hw, 0, w.z);
+    const c = project(hw, hWall, w.z);
+    const d = project(-hw, hWall, w.z);
     if (!a || !b || !c || !d) continue;
 
-    // Deep gold void
-    const midX = (a[0] + b[0] + c[0] + d[0]) / 4;
-    const midY = (a[1] + b[1] + c[1] + d[1]) / 4;
-    const grd = ctx.createRadialGradient(midX, midY, 2, midX, midY, Math.abs(b[0] - a[0]) * 0.6 + 8);
-    if (p.claimed) {
-      grd.addColorStop(0, 'rgba(40,80,40,0.9)');
-      grd.addColorStop(1, 'rgba(10,20,10,0.95)');
-    } else {
-      grd.addColorStop(0, 'rgba(255,200,60,0.55)');
-      grd.addColorStop(0.45, 'rgba(80,40,10,0.85)');
-      grd.addColorStop(1, 'rgba(8,6,20,0.98)');
-    }
-    ctx.fillStyle = grd;
+    const canSmash = playerVal != null && playerVal >= w.need;
+    ctx.fillStyle = canSmash ? 'rgba(255,185,35,0.62)' : 'rgba(255,120,70,0.55)';
     ctx.beginPath();
     ctx.moveTo(a[0], a[1]);
     ctx.lineTo(b[0], b[1]);
@@ -238,32 +233,43 @@ function drawBonusWells(levelData, zn, zf) {
     ctx.lineTo(d[0], d[1]);
     ctx.closePath();
     ctx.fill();
-
-    ctx.strokeStyle = p.claimed ? 'rgba(100,200,100,0.4)' : 'rgba(255,220,80,0.75)';
+    ctx.strokeStyle = 'rgba(255,255,255,0.88)';
     ctx.lineWidth = 2.5;
     ctx.stroke();
 
-    // Value label hovering over the well
-    const mid = project((p.x0 + p.x1) / 2, 0.55, (p.z0 + p.z1) / 2);
-    if (!mid) continue;
-    const s = mid[2];
-    const fontSize = Math.max(11, Math.min(28, 18 * s * 0.12));
-    ctx.font = '900 ' + fontSize + 'px system-ui,Segoe UI,sans-serif';
+    // brick joints
+    ctx.strokeStyle = 'rgba(180,110,10,0.5)';
+    ctx.lineWidth = 1.5;
+    for (const fy of [0.25, 0.5, 0.75]) {
+      const l = project(-hw, hWall * fy, w.z);
+      const r = project(hw, hWall * fy, w.z);
+      if (!l || !r) continue;
+      ctx.beginPath();
+      ctx.moveTo(l[0], l[1]);
+      ctx.lineTo(r[0], r[1]);
+      ctx.stroke();
+    }
+
+    const mid = project(0, hWall * 0.62, w.z);
+    const sub = project(0, hWall * 0.28, w.z);
+    if (!mid || !sub) continue;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    const label = p.claimed ? '✓' : String(p.minValue);
-    ctx.lineWidth = Math.max(2, fontSize * 0.16);
-    ctx.strokeStyle = 'rgba(0,0,0,0.65)';
-    ctx.strokeText(label, mid[0], mid[1]);
-    ctx.fillStyle = p.claimed ? '#8bffb0' : '#ffe66d';
-    ctx.fillText(label, mid[0], mid[1]);
+    const big = Math.max(14, mid[2] * 1.45);
+    ctx.font = '800 ' + big + 'px system-ui,Segoe UI,sans-serif';
+    ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+    ctx.lineWidth = 4;
+    ctx.strokeText('x' + w.mult, mid[0], mid[1]);
+    ctx.fillStyle = '#fff';
+    ctx.fillText('x' + w.mult, mid[0], mid[1]);
 
-    // small "BONUS" tag
-    if (!p.claimed) {
-      ctx.font = '700 ' + Math.max(8, fontSize * 0.45) + 'px system-ui,sans-serif';
-      ctx.fillStyle = 'rgba(255,255,255,0.85)';
-      ctx.fillText('BONUS', mid[0], mid[1] + fontSize * 0.7);
-    }
+    const small = Math.max(10, sub[2] * 0.7);
+    ctx.font = '700 ' + small + 'px system-ui,Segoe UI,sans-serif';
+    ctx.lineWidth = 3;
+    const needStr = 'need ' + w.need;
+    ctx.strokeText(needStr, sub[0], sub[1]);
+    ctx.fillStyle = canSmash ? '#b9ffb9' : '#ffb4a0';
+    ctx.fillText(needStr, sub[0], sub[1]);
   }
 }
 
@@ -663,10 +669,10 @@ function drawWorld(player, levelData, dt) {
   drawSky();
   drawTrackStrip(levelData, zn, zf);
   drawPits(levelData, zn, zf);
-  drawBonusWells(levelData, zn, zf);
   drawCurbs(levelData, zn, zf);
   drawFinish(levelData ? levelData.finishZ : null, zn, zf);
   drawThorns(levelData, zn, zf);
+  drawBonusWalls(levelData, zn, zf, player ? player.value : null);
 
   // orbs sorted by z for painter's algorithm (far first)
   if (levelData) {

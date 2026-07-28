@@ -71,7 +71,7 @@ function showWinScreen() {
   $('winCoins').textContent = '+' + lastCoinsEarned;
   const bonusEl = $('winBonus');
   if (bonusEl) {
-    bonusEl.textContent = lastBonusCoins > 0 ? ('+' + lastBonusCoins) : '—';
+    bonusEl.textContent = lastBonusMult > 1 ? ('x' + lastBonusMult) : 'x1';
   }
   $('winMerges').textContent = String(mergeCount);
   $('winLevel').textContent = String(currentLevel);

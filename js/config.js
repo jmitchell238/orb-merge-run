@@ -3,7 +3,7 @@
 
 // ---- Version (MAJOR.MINOR.PATCH) --------------------------------------------
 // Keep CACHE in sw.js in sync: 'orb-merge-run-' + GAME_VERSION
-const GAME_VERSION = '1.2.002';
+const GAME_VERSION = '1.2.003';
 const GAME_VERSION_LABEL = 'v' + GAME_VERSION;
 const GAME_NAME = 'Orb Merge Run';
 
@@ -53,7 +53,10 @@ const MAX_THORNS_BY_LEVEL = [0, 4, 5, 6, 7, 8, 9, 10, 11, 12, 12, 13, 14];
 const BASE_LEN = 200;
 const LEN_STEP = 28;
 const FINISH_PAD = 10;
-const BONUS_ZONE_LEN = 18;
+// Crowd-runner style: multiplier walls AFTER the checkered finish
+const BONUS_WALL_START = 12;   // first wall after finishZ
+const BONUS_WALL_SPACING = 14;
+const BONUS_WALL_MULTS = [2, 3, 4, 6, 10];
 const MAX_LEVEL = 12;
 
 // Camera (adapted from crowd-runner — not identical)
@@ -88,15 +91,24 @@ function levelSpeed(L) {
 }
 
 function finishZForLevel(L) {
-  return BASE_LEN + (L - 1) * LEN_STEP + FINISH_PAD + BONUS_ZONE_LEN;
+  // Checkered goal only — bonus walls sit after this
+  return BASE_LEN + (L - 1) * LEN_STEP + FINISH_PAD;
 }
 
-function coinsForFinish(level, value, mergeCount, bonusCoins) {
+function bonusEndZForLevel(finishZ) {
+  return finishZ + BONUS_WALL_START + BONUS_WALL_MULTS.length * BONUS_WALL_SPACING + 4;
+}
+
+/**
+ * Base coins × bonusMult (from post-finish walls, like Crowd Clash Runner).
+ * @param {number} bonusMult coin multiplier (1 if no walls smashed)
+ */
+function coinsForFinish(level, value, mergeCount, bonusMult) {
   const base = 20 + level * 8;
   const valueScore = Math.round(Math.log2(Math.max(2, value)) * 12);
   const mergeBonus = mergeCount * 2;
-  const well = bonusCoins || 0;
-  return Math.round((base + valueScore + mergeBonus + well) * COIN_MULT);
+  const mult = Math.max(1, bonusMult || 1);
+  return Math.round((base + valueScore + mergeBonus) * mult * COIN_MULT);
 }
 
 function DRAW_R_OF(v) {

@@ -66,14 +66,16 @@ function loadGame() {
       isPowerOfTwo, nextValue, demoteValue, tierForValue, valueForTier,
       colorForValue, radiusForValue,
       dist2PointSegment, sweptCircleHit, circleHit, isOffRail, hasSupport,
-      stripHit, sweptStripHit, softNudge, stepOrbMotion, bonusWellAt,
+      stripHit, sweptStripHit, softNudge, stepOrbMotion,
       expectedValue, pickOrbValue, endTierForLevel, maxValueAt,
       TEMPLATES, TEMPLATES_BY_ID,
-      buildLevel, instantiateTemplate, trackHalfAt, pitsOf, bonusesOf,
+      buildLevel, instantiateTemplate, trackHalfAt, pitsOf,
       sanitizeForLevel, buildTrackKeyframes, overlapsTooClose,
-      injectMergeLadder, clampOrbValuesToCurve, injectBonusFinale,
+      injectMergeLadder, clampOrbValuesToCurve, buildBonusWalls,
+      bonusEndZForLevel,
       SAVE_KEY, defaultSave, loadSave, save,
-      KNOCK_SPEED, GHOST_S, NUDGE_X, BASE_LEN, BONUS_ZONE_LEN,
+      KNOCK_SPEED, GHOST_S, NUDGE_X, BASE_LEN, FINISH_PAD, LEN_STEP,
+      BONUS_WALL_MULTS, BONUS_WALL_START, BONUS_WALL_SPACING,
     };
   `;
 
@@ -247,13 +249,14 @@ section('scoring');
 assertEq(T.COIN_MULT, 1, 'COIN_MULT=1');
 assert(T.coinsForFinish(1, 2, 0) > 0, 'coins positive');
 assert(T.coinsForFinish(1, 2048, 10) > T.coinsForFinish(1, 2, 0), 'bigger value more coins');
-assertEq(T.finishZForLevel(1), T.BASE_LEN + T.FINISH_PAD + T.BONUS_ZONE_LEN, 'finishZ L1');
+assertEq(T.finishZForLevel(1), T.BASE_LEN + T.FINISH_PAD, 'finishZ L1');
 assertEq(
   T.finishZForLevel(5),
-  T.BASE_LEN + 4 * T.LEN_STEP + T.FINISH_PAD + T.BONUS_ZONE_LEN,
+  T.BASE_LEN + 4 * T.LEN_STEP + T.FINISH_PAD,
   'finishZ L5'
 );
-assert(T.coinsForFinish(1, 64, 5, 50) > T.coinsForFinish(1, 64, 5, 0), 'bonus coins increase payout');
+assert(T.coinsForFinish(1, 64, 5, 3) > T.coinsForFinish(1, 64, 5, 1), 'bonus mult increases payout');
+assertEq(T.coinsForFinish(1, 64, 5, 2), T.coinsForFinish(1, 64, 5, 1) * 2, 'x2 doubles coins');
 
 // ---- Level gen --------------------------------------------------------------
 section('level generation');
@@ -265,7 +268,7 @@ const L1a = T.buildLevel(1, 10007);
 const L1b = T.buildLevel(1, 10007);
 assert(JSON.stringify(L1a) === JSON.stringify(L1b), 'determinism L1 seed');
 assertEq(L1a.finishZ, T.finishZForLevel(1), 'finishZ match');
-// L1: thorns ok (after intro), no pits; bonus wells OK
+// L1: thorns ok (after intro), no pits
 assert(L1a.hazards.filter(h => h.type === 'pit').length === 0, 'L1 no pits');
 assert(L1a.hazards.some(h => h.type === 'thorn'), 'L1 has thorns (spice)');
 assert(L1a.orbs.some(o => o.value === 2 && o.z < 40), 'L1 early value-2');
@@ -282,11 +285,21 @@ assert(L1a.orbs.length >= 3, 'L1 has orbs');
   const far = L1a.orbs.filter(o => Math.abs(o.x) >= 2.0).length;
   assert(far >= 4, 'L1 has several wide-lane orbs (got ' + far + ')');
 }
-// bonus wells present
+// Crowd-runner style bonus walls AFTER finish
 {
-  const bonuses = T.bonusesOf(L1a);
-  assert(bonuses.length >= 2, 'L1 has bonus wells (got ' + bonuses.length + ')');
-  assert(bonuses.every(b => b.minValue >= 8 && b.coins > 0), 'bonus wells valid');
+  assert(L1a.bonusWalls && L1a.bonusWalls.length === T.BONUS_WALL_MULTS.length,
+    'L1 has ' + T.BONUS_WALL_MULTS.length + ' bonus walls');
+  assert(L1a.bonusWalls.every(w => w.z > L1a.finishZ), 'bonus walls after finish');
+  assert(L1a.bonusWalls[0].mult === 2 && L1a.bonusWalls[4].mult === 10, 'wall mults 2…10');
+  assert(L1a.bonusWalls.every(w => w.need >= 4 && (w.need & (w.need - 1)) === 0),
+    'wall need is power of two');
+  // needs strictly increasing
+  for (let i = 1; i < L1a.bonusWalls.length; i++) {
+    assert(L1a.bonusWalls[i].need > L1a.bonusWalls[i - 1].need, 'wall needs increase');
+  }
+  assert(L1a.bonusEndZ > L1a.bonusWalls[L1a.bonusWalls.length - 1].z, 'bonusEndZ past last wall');
+  // no hole-style bonus hazards
+  assert(L1a.hazards.every(h => h.type !== 'bonus'), 'no bonus pit hazards');
 }
 // not a wall of orbs
 {
@@ -312,7 +325,8 @@ for (let L = 1; L <= 12; L++) {
   const lv = T.buildLevel(L, L * 10007);
   assert(Number.isFinite(lv.finishZ), `L${L} finishZ finite`);
   assert(lv.orbs.length > 0, `L${L} has orbs`);
-  assert(T.bonusesOf(lv).length >= 1, `L${L} has bonus wells`);
+  assert(lv.bonusWalls && lv.bonusWalls.length === T.BONUS_WALL_MULTS.length,
+    `L${L} has bonus walls`);
   // pits ledge
   for (const h of lv.hazards) {
     if (h.type === 'pit') {
@@ -359,12 +373,12 @@ assertEq(T.expectedValue(12, 1), 2048, 'L12 end ≈2048');
   assert(L1.orbs.length <= 45, 'L1 still sparse (got ' + L1.orbs.length + ')');
 }
 
-// bonus well support + claim rule helpers
+// bonus walls helper
 {
-  const well = { type: 'bonus', x0: -1, x1: 1, z0: 10, z1: 14, minValue: 32, coins: 40, claimed: false };
-  assert(T.hasSupport(0, 12, 5, [well]) === false, 'bonus well removes support');
-  assert(T.bonusWellAt(0, 12, [well]) === well, 'bonusWellAt finds well');
-  assert(T.bonusWellAt(3, 12, [well]) === null, 'bonusWellAt miss side');
+  const walls = T.buildBonusWalls(1, 210);
+  assert(walls.length === 5, 'buildBonusWalls count');
+  assert(walls[0].z > 210, 'first wall after finish');
+  assert(walls.every((w, i) => w.mult === T.BONUS_WALL_MULTS[i]), 'mults match config');
 }
 
 // trackHalfAt half-open

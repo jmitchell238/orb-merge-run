@@ -64,7 +64,7 @@ function loadGame() {
       levelSpeed, finishZForLevel, coinsForFinish,
       clamp, lerp, smoothstep, mulberry32, weightedPick,
       isPowerOfTwo, nextValue, demoteValue, tierForValue, valueForTier,
-      colorForValue, radiusForValue,
+      colorForValue, radiusForValue, formatValueLabel,
       dist2PointSegment, sweptCircleHit, circleHit, isOffRail, hasSupport,
       stripHit, sweptStripHit, softNudge, stepOrbMotion,
       expectedValue, pickOrbValue, endTierForLevel, maxValueAt,
@@ -156,6 +156,11 @@ assert(T.radiusForValue(2) === T.BASE_R, 'radius 2 = BASE_R');
 assert(T.radiusForValue(2048) <= T.MAX_R, 'radius capped');
 assert(T.colorForValue(2048).color === 'rainbow', '2048 rainbow');
 assert(T.colorForValue(4096).color === 'rainbow', '4096 rainbow');
+// labels must stay exact for post-2048 values (sprite bake uses these)
+assertEq(T.formatValueLabel(2048), '2048', 'label 2048');
+assertEq(T.formatValueLabel(4096), '4096', 'label 4096');
+assertEq(T.formatValueLabel(8192), '8192', 'label 8192');
+assertEq(T.nextValue(2048, 2048), 4096, '2048+2048=4096');
 
 // ---- Swept collision --------------------------------------------------------
 section('swept collision');

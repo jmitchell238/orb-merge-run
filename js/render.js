@@ -458,7 +458,8 @@ function bakeOrbFrame(value, fill, glow, roll) {
 }
 
 function orbCacheKey(value) {
-  if (value >= 2048) return '2048+';
+  // Must be unique per value — never collapse 2048/4096/8192 into one key
+  // (that made 4096 still show "2048" on the ball)
   return String(value);
 }
 

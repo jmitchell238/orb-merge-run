@@ -3,7 +3,7 @@
 
 // ---- Version (MAJOR.MINOR.PATCH) --------------------------------------------
 // Keep CACHE in sw.js in sync: 'orb-merge-run-' + GAME_VERSION
-const GAME_VERSION = '1.2.010';
+const GAME_VERSION = '1.3.000';
 const GAME_VERSION_LABEL = 'v' + GAME_VERSION;
 const GAME_NAME = 'Orb Merge Run';
 
@@ -56,17 +56,38 @@ const THORN_DEPTH = 1.0;
 // Cap thorns per level — keep the run spicy (was too empty)
 // index = level, value = max thorn strips
 // Keep thorns sparse — open road between challenges
+// Index = level (1-based used via MAX_THORNS_BY_LEVEL[L]); beyond array → formula
 const MAX_THORNS_BY_LEVEL = [0, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8];
 
-// Level length — longer road, sparser content (Ball Run feel)
+// Level length — grows forever for endless levels
 const BASE_LEN = 200;
-const LEN_STEP = 28;
+const LEN_STEP = 24;
 const FINISH_PAD = 10;
 // Crowd-runner style: multiplier walls AFTER the checkered finish
 const BONUS_WALL_START = 12;   // first wall after finishZ
 const BONUS_WALL_SPACING = 14;
 const BONUS_WALL_MULTS = [2, 3, 4, 6, 10];
-const MAX_LEVEL = 12;
+// Campaign hint only — levels continue forever (seeded procedural)
+const CAMPAIGN_LEVELS = 12;
+// Soft UI cap for dropdown length (still can play any unlocked level)
+const LEVEL_SELECT_WINDOW = 40;
+// Legacy alias: no hard end — use Infinity-safe large number for clamps that need one
+const MAX_LEVEL = 9999;
+
+function maxThornsForLevel(L) {
+  if (L < MAX_THORNS_BY_LEVEL.length && MAX_THORNS_BY_LEVEL[L] != null) {
+    return MAX_THORNS_BY_LEVEL[L];
+  }
+  return Math.min(10, 4 + Math.floor(L / 4));
+}
+
+/** Stable unique seed per level (endless stays deterministic per L). */
+function seedForLevel(L) {
+  let s = (L * 10007) ^ (L * 7919) ^ 0x9e3779b9;
+  s = Math.imul(s ^ (s >>> 16), 0x7feb352d);
+  s = Math.imul(s ^ (s >>> 15), 0x846ca68b);
+  return (s ^ (s >>> 16)) >>> 0;
+}
 
 // Camera (adapted from crowd-runner — not identical)
 const PITCH = 0.42;
@@ -95,12 +116,13 @@ const TIERS = [
 ];
 
 function levelSpeed(L) {
-  // Slightly gentler ramp — more time to aim merges
-  return Math.min(7.2 + (L - 1) * 0.38, 13.5);
+  // Slow ramp — endless can get spicy later without early rush
+  return Math.min(6.8 + (L - 1) * 0.22, 12.5);
 }
 
 function finishZForLevel(L) {
   // Checkered goal only — bonus walls sit after this
+  // Slight length growth forever
   return BASE_LEN + (L - 1) * LEN_STEP + FINISH_PAD;
 }
 

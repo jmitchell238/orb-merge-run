@@ -59,9 +59,9 @@ function loadGame() {
   const exportFooter = `
     globalThis.__TEST__ = {
       GAME_VERSION, GAME_NAME, TRACK_W, TRACK_HALF, FALL_MARGIN, HIT_PAD,
-      BASE_R, MAX_R, MAX_CHAIN, MAX_LEVEL, COIN_MULT, THORN_DEPTH,
+      BASE_R, MAX_R, MAX_CHAIN, MAX_LEVEL, CAMPAIGN_LEVELS, COIN_MULT, THORN_DEPTH,
       TIERS, BASE_LEN, LEN_STEP, FINISH_PAD,
-      levelSpeed, finishZForLevel, coinsForFinish,
+      levelSpeed, finishZForLevel, coinsForFinish, seedForLevel, maxThornsForLevel,
       clamp, lerp, smoothstep, mulberry32, weightedPick,
       isPowerOfTwo, nextValue, demoteValue, tierForValue, valueForTier,
       colorForValue, radiusForValue, formatValueLabel,
@@ -327,12 +327,11 @@ const L3 = T.buildLevel(3, 30021);
 assert(L3.hazards.filter(h => h.type === 'thorn').length <= 5, 'L3 few thorns');
 
 for (let L = 1; L <= 12; L++) {
-  const lv = T.buildLevel(L, L * 10007);
+  const lv = T.buildLevel(L, T.seedForLevel(L));
   assert(Number.isFinite(lv.finishZ), `L${L} finishZ finite`);
   assert(lv.orbs.length > 0, `L${L} has orbs`);
   assert(lv.bonusWalls && lv.bonusWalls.length === T.BONUS_WALL_MULTS.length,
     `L${L} has bonus walls`);
-  // pits ledge
   for (const h of lv.hazards) {
     if (h.type === 'pit') {
       const ledge = (h.x0 - (-T.TRACK_HALF)) + (T.TRACK_HALF - h.x1);
@@ -348,31 +347,41 @@ for (let L = 1; L <= 12; L++) {
   assert(Date.now() - t0 < 2000, 'buildLevel finishes quickly');
 }
 
-// expected value end tiers — high enough for 512 on L1
-assertEq(T.expectedValue(1, 1), 512, 'L1 end ≈512');
-assertEq(T.expectedValue(12, 1), 2048, 'L12 end ≈2048');
-// progressive climb: few 2s then 4s then 8s (not a dense flood)
+// Slow climb: L1 tops around 16, L12 around 256 — not already 4096
+assertEq(T.endTierForLevel(1), 3, 'L1 endTier 3 (16)');
+assertEq(T.expectedValue(1, 1), 16, 'L1 end ≈16');
+assertEq(T.endTierForLevel(12), 7, 'L12 endTier 7 (256)');
+assertEq(T.expectedValue(12, 1), 256, 'L12 end ≈256');
+assert(T.endTierForLevel(24) >= 11, 'L24 can reach 4096 tier');
+// progressive climb early
 {
-  const L5 = T.buildLevel(5, 5 * 10007);
+  const L5 = T.buildLevel(5, T.seedForLevel(5));
   const c2 = L5.orbs.filter(o => o.value === 2).length;
   const c4 = L5.orbs.filter(o => o.value === 4).length;
   const c8 = L5.orbs.filter(o => o.value === 8).length;
-  const c16 = L5.orbs.filter(o => o.value === 16).length;
-  assert(c2 >= 3, 'L5 has climb 2s (got ' + c2 + ')');
-  assert(c4 >= 2, 'L5 has climb 4s (got ' + c4 + ')');
+  assert(c2 >= 2, 'L5 has climb 2s (got ' + c2 + ')');
+  assert(c4 >= 1, 'L5 has climb 4s (got ' + c4 + ')');
   assert(c8 >= 1, 'L5 has climb 8s (got ' + c8 + ')');
-  assert(c16 >= 1, 'L5 has climb 16s (got ' + c16 + ')');
-  assert(L5.orbs.length >= 16 && L5.orbs.length <= 40, 'L5 roomy field (got ' + L5.orbs.length + ')');
-  const earlyHigh = L5.orbs.filter(o => o.z < L5.finishZ * 0.15 && o.value >= 128).length;
-  assert(earlyHigh <= 2, 'L5 early track not stacked with 128+ (got ' + earlyHigh + ')');
+  assert(L5.orbs.length >= 12 && L5.orbs.length <= 40, 'L5 roomy field (got ' + L5.orbs.length + ')');
+  const earlyHigh = L5.orbs.filter(o => o.z < L5.finishZ * 0.15 && o.value >= 64).length;
+  assert(earlyHigh <= 2, 'L5 early track not stacked with 64+ (got ' + earlyHigh + ')');
 }
-// L1 full ladder through 256+ so 512 is reachable
+// L1 ladder only through its end tier (16)
 {
-  const L1 = T.buildLevel(1, 10007);
-  for (const v of [2, 4, 8, 16, 32, 64, 128, 256, 512]) {
+  const L1 = T.buildLevel(1, T.seedForLevel(1));
+  for (const v of [2, 4, 8, 16]) {
     const n = L1.orbs.filter(o => o.value === v).length;
     assert(n >= 1, 'L1 ladder has ' + v + ' (got ' + n + ')');
   }
+  assert(L1.orbs.every(o => o.value <= 32), 'L1 no extreme teases');
+}
+// Endless: high levels still build
+{
+  const L50 = T.buildLevel(50, T.seedForLevel(50));
+  assert(L50.orbs.length > 0, 'L50 has orbs');
+  assert(L50.finishZ > T.finishZForLevel(12), 'L50 longer than L12');
+  assert(L50.bonusWalls.length === T.BONUS_WALL_MULTS.length, 'L50 bonus walls');
+  assert(T.seedForLevel(50) !== T.seedForLevel(51), 'seeds differ by level');
 }
 
 // bonus walls helper

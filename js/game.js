@@ -39,8 +39,8 @@ function makePlayer() {
 }
 
 function startLevel(L, seedOverride) {
-  currentLevel = clamp(L | 0, 1, MAX_LEVEL);
-  const seed = seedOverride != null ? (seedOverride | 0) : (currentLevel * 10007);
+  currentLevel = Math.max(1, L | 0);
+  const seed = seedOverride != null ? (seedOverride | 0) : seedForLevel(currentLevel);
   levelData = buildLevel(currentLevel, seed);
   player = makePlayer();
   mergeCount = 0;

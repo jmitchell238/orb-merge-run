@@ -21,14 +21,36 @@ function updateMenuStats() {
   const sel = $('levelSelect');
   if (sel) {
     sel.innerHTML = '';
-    for (let i = 1; i <= MAX_LEVEL; i++) {
+    const unlocked = Math.max(1, save.maxUnlocked | 0);
+    // Show a sliding window so endless doesn't make a 500-option dropdown
+    let lo = 1;
+    let hi = unlocked;
+    if (unlocked > LEVEL_SELECT_WINDOW) {
+      lo = Math.max(1, unlocked - LEVEL_SELECT_WINDOW + 1);
+      hi = unlocked;
+      // Always keep campaign 1–12 reachable if unlocked
+      if (lo > 1 && unlocked >= CAMPAIGN_LEVELS) {
+        for (let i = 1; i <= Math.min(CAMPAIGN_LEVELS, unlocked); i++) {
+          const opt0 = document.createElement('option');
+          opt0.value = String(i);
+          opt0.textContent = 'Level ' + i + (i <= CAMPAIGN_LEVELS ? '' : '');
+          sel.appendChild(opt0);
+        }
+        const sep = document.createElement('option');
+        sep.disabled = true;
+        sep.textContent = '────────';
+        sel.appendChild(sep);
+      }
+    }
+    for (let i = lo; i <= hi; i++) {
+      // skip if already added in campaign block
+      if (sel.querySelector('option[value="' + i + '"]')) continue;
       const opt = document.createElement('option');
       opt.value = String(i);
-      opt.textContent = i <= save.maxUnlocked
-        ? ('Level ' + i)
-        : ('Level ' + i + ' 🔒');
-      opt.disabled = i > save.maxUnlocked;
-      if (i === Math.min(save.maxUnlocked, MAX_LEVEL)) opt.selected = true;
+      opt.textContent = i > CAMPAIGN_LEVELS
+        ? ('Level ' + i + ' ∞')
+        : ('Level ' + i);
+      if (i === unlocked) opt.selected = true;
       sel.appendChild(opt);
     }
   }
@@ -75,8 +97,8 @@ function showWinScreen() {
   }
   $('winMerges').textContent = String(mergeCount);
   $('winLevel').textContent = String(currentLevel);
-  const next = currentLevel < MAX_LEVEL ? currentLevel + 1 : currentLevel;
-  $('btnNext').textContent = currentLevel < MAX_LEVEL ? ('▶  Level ' + next) : '▶  Replay L' + MAX_LEVEL;
+  const next = currentLevel + 1;
+  $('btnNext').textContent = '▶  Level ' + next;
   $('winRainbow').classList.toggle('hidden', !celebration2048 && lastFinishValue < 2048);
   if (window.__pendingReload) {
     window.__pendingReload = false;
@@ -230,7 +252,7 @@ function init() {
 
   $('btnNext').addEventListener('click', function () {
     sfxClick();
-    const next = currentLevel < MAX_LEVEL ? currentLevel + 1 : currentLevel;
+    const next = currentLevel + 1;
     beginPlay(next);
   });
 
@@ -258,9 +280,10 @@ function init() {
   // query params for QA: ?level=N&seed=S&unlock=1&debug=1
   const params = new URLSearchParams(location.search);
   if (params.has('level')) {
-    const L = clamp(parseInt(params.get('level'), 10) || 1, 1, MAX_LEVEL);
+    const L = Math.max(1, parseInt(params.get('level'), 10) || 1);
     if (params.has('seed') || params.get('unlock') === '1') {
       save.maxUnlocked = Math.max(save.maxUnlocked, L);
+      persist();
     }
     const seed = params.has('seed') ? parseInt(params.get('seed'), 10) : undefined;
     beginPlay(L, Number.isFinite(seed) ? seed : undefined);

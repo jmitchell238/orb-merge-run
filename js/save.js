@@ -42,10 +42,9 @@ function recordWin(level, value, coinsEarned) {
   if (value > save.bestValue) save.bestValue = value;
   const prev = save.bestValueByLevel[level] || 0;
   if (value > prev) save.bestValueByLevel[level] = value;
-  if (level >= save.maxUnlocked && level < MAX_LEVEL) {
+  // Endless: always unlock the next level after a win
+  if (level >= save.maxUnlocked) {
     save.maxUnlocked = level + 1;
-  } else if (level >= MAX_LEVEL) {
-    save.maxUnlocked = MAX_LEVEL;
   }
   persist();
 }

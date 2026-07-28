@@ -1,24 +1,33 @@
 'use strict';
 
 // ---- Expected-value curve ---------------------------------------------------
-// Sparse, progressive climb (Ball Run style): a few 2s → few 4s → few 8s…
-// High end tiers so a clean L1 run can reach 256–512.
+// Slow climb so L12 is mid-game, not already at 2048/4096.
+// Endless levels keep growing the ceiling gradually forever.
 
-/** Soft end-tier for level L (0-based: 0=2, 1=4, …). */
+/**
+ * Soft end-tier for level L (0-based: 0=2, 1=4, 2=8, …).
+ * L1  → 3  (16)
+ * L6  → 5  (64)
+ * L12 → 7  (256)
+ * L18 → 9  (1024)
+ * L24 → 11 (4096)
+ * L36 → 15 (65536) …
+ */
 function endTierForLevel(L) {
-  // L1→8 (512), L5→9 (1024), L9+→10 (2048) — high climb like Ball Run
-  return Math.min(10, 8 + Math.floor((L - 1) * 0.25));
+  L = Math.max(1, L | 0);
+  // Start at tier 3 (16), +0.4 tier per level, soft cap very high for endless
+  return Math.min(20, 3 + Math.floor((L - 1) * 0.4));
 }
 
 /**
  * Expected player value at normalized progress u∈[0,1].
- * Step-like plateaus so each tier has a clear stretch of matches.
+ * Long plateaus early so merges feel intentional.
  */
 function expectedValue(L, u) {
   const endTier = endTierForLevel(L);
   const startTier = 0;
-  // Slow early climb, accelerate late
-  const eased = Math.pow(smoothstep(u), 1.15);
+  // Stay low longer (u^1.55) so first half is mostly small balls
+  const eased = Math.pow(smoothstep(u), 1.55);
   const t = startTier + (endTier - startTier) * eased;
   return valueForTier(Math.round(t));
 }
@@ -40,11 +49,12 @@ function pickOrbValue(L, u, rng, tierDelta) {
   return valueForTier(Math.max(0, tier));
 }
 
-/** Hard cap: orb value may not exceed expected(+1) at its z. */
+/** Hard cap: orb value may not exceed expected(+1) at its z (no artificial 2048 ceiling). */
 function maxValueAt(L, z, finishZ) {
   const u = clamp(z / Math.max(1, finishZ), 0, 1);
   const expTier = tierForValue(expectedValue(L, u));
-  return valueForTier(Math.min(10, expTier + 1));
+  const capTier = Math.min(endTierForLevel(L) + 1, expTier + 1);
+  return valueForTier(Math.max(0, capTier));
 }
 
 // ---- Templates (exactly 20) — zigzag orbs + real hazards -----------------------
@@ -378,9 +388,7 @@ function sanitizeForLevel(L, orbs, hazards) {
     if (L === 3 && h.type === 'pit' && h.z0 < 70) { hazards.splice(i, 1); continue; }
   }
 
-  const maxThorns = MAX_THORNS_BY_LEVEL[L] != null
-    ? MAX_THORNS_BY_LEVEL[L]
-    : MAX_THORNS_BY_LEVEL[MAX_THORNS_BY_LEVEL.length - 1];
+  const maxThorns = maxThornsForLevel(L);
   const thornIdx = [];
   for (let i = 0; i < hazards.length; i++) {
     if (hazards[i].type === 'thorn') thornIdx.push(i);
@@ -439,21 +447,23 @@ function injectMergeLadder(L, orbs, finishZ, rng) {
     return true;
   }
 
-  // Sparse packs: 1–2 balls every ~24–32 units
+  // Sparse packs: 1–2 balls, spacing varies by level seed (feels different each L)
+  const baseGap = 22 + (L % 5) * 2; // 22–30
   let z = climbStart;
   while (z < climbEnd - 8) {
     const u = clamp((z - climbStart) / Math.max(1, climbEnd - climbStart), 0, 1);
     const expTier = tierForValue(expectedValue(L, u));
-    const clusterN = rng() < 0.55 ? 1 : 2;
+    // Slightly denser mid-run, airier start/end
+    const dens = u > 0.2 && u < 0.75 ? 0.5 : 0.7;
+    const clusterN = rng() < dens ? 1 : 2;
     const used = [];
 
     for (let i = 0; i < clusterN; i++) {
       let tier;
       if (i === 0) tier = expTier;
-      else tier = rng() < 0.5 ? Math.max(0, expTier - 1) : Math.min(endTier, expTier + 1);
+      else tier = rng() < 0.55 ? Math.max(0, expTier - 1) : Math.min(endTier, expTier + 1);
 
       let lane = LANES[Math.floor(rng() * LANES.length)];
-      // Prefer opposite side for second ball
       if (i === 1 && used.length) {
         lane = used[0] > 0 ? -Math.abs(LANES[0]) : Math.abs(LANES[LANES.length - 1]);
         if (rng() < 0.35) lane = LANES[Math.floor(rng() * LANES.length)];
@@ -462,7 +472,7 @@ function injectMergeLadder(L, orbs, finishZ, rng) {
       place(lane + (rng() - 0.5) * 0.25, z + (rng() - 0.5) * 1.5, valueForTier(tier));
     }
 
-    z += 24 + rng() * 10;
+    z += baseGap + rng() * 12;
   }
 
   // Climb path only — one of each tier (two for 2s)
@@ -513,15 +523,15 @@ function ensureEarlyMerges(L, orbs) {
  * Few obstacle beats — mostly open road.
  */
 function injectObstacleCourse(L, hazards, finishZ, rng) {
-  // L1: very few thorns, late
-  const start = L <= 1 ? 55 : 40;
+  // L1: very few thorns, late; later levels introduce hazards earlier
+  const start = L <= 1 ? 70 : (L <= 4 ? 50 : 38);
   const end = finishZ - FINISH_PAD - 12;
   if (end <= start + 15) return;
 
   let z = start + rng() * 8;
   let hid = 0;
-  // Wide gaps between hazard beats
-  const spacing = L <= 2 ? 42 : (L <= 5 ? 34 : 28);
+  // Wide gaps — still roomy at high endless levels
+  const spacing = L <= 2 ? 48 : (L <= 6 ? 40 : (L <= 12 ? 34 : 30));
 
   while (z < end) {
     const pattern = rng();

@@ -268,22 +268,21 @@ const L1a = T.buildLevel(1, 10007);
 const L1b = T.buildLevel(1, 10007);
 assert(JSON.stringify(L1a) === JSON.stringify(L1b), 'determinism L1 seed');
 assertEq(L1a.finishZ, T.finishZForLevel(1), 'finishZ match');
-// L1: thorns ok (after intro), no pits
+// L1: no pits; few late thorns only
 assert(L1a.hazards.filter(h => h.type === 'pit').length === 0, 'L1 no pits');
-assert(L1a.hazards.some(h => h.type === 'thorn'), 'L1 has thorns (spice)');
+assert(L1a.hazards.filter(h => h.type === 'thorn').length <= 3, 'L1 few thorns');
 assert(L1a.orbs.some(o => o.value === 2 && o.z < 40), 'L1 early value-2');
 assert(L1a.orbs.length >= 3, 'L1 has orbs');
-// early merge guarantee: at least 2 twos before z=60 (can be wide lanes)
 {
   const early = L1a.orbs.filter(o => o.value === 2 && o.z < 60);
   assert(early.length >= 2, 'L1 ensureEarlyMerges (≥2 early twos)');
 }
-// orbs must zigzag — not all parked on center
+// orbs not all on center line
 {
   const avgAbsX = L1a.orbs.reduce((s, o) => s + Math.abs(o.x), 0) / L1a.orbs.length;
-  assert(avgAbsX >= 1.2, 'L1 orbs spread laterally (avg|x|=' + avgAbsX.toFixed(2) + ')');
-  const far = L1a.orbs.filter(o => Math.abs(o.x) >= 2.0).length;
-  assert(far >= 4, 'L1 has several wide-lane orbs (got ' + far + ')');
+  assert(avgAbsX >= 1.0, 'L1 orbs spread laterally (avg|x|=' + avgAbsX.toFixed(2) + ')');
+  const far = L1a.orbs.filter(o => Math.abs(o.x) >= 1.6).length;
+  assert(far >= 3, 'L1 has wide-lane orbs (got ' + far + ')');
 }
 // Crowd-runner style bonus walls AFTER finish
 {
@@ -301,28 +300,26 @@ assert(L1a.orbs.length >= 3, 'L1 has orbs');
   // no hole-style bonus hazards
   assert(L1a.hazards.every(h => h.type !== 'bonus'), 'no bonus pit hazards');
 }
-// Moderate Ball Run density — NOT a carpet, NOT empty
+// Roomier density
 {
-  assert(L1a.orbs.length >= 30, 'L1 has a real field (got ' + L1a.orbs.length + ')');
-  assert(L1a.orbs.length <= 55, 'L1 not a carpet of balls (got ' + L1a.orbs.length + ')');
+  assert(L1a.orbs.length >= 14, 'L1 has balls (got ' + L1a.orbs.length + ')');
+  assert(L1a.orbs.length <= 30, 'L1 not crowded (got ' + L1a.orbs.length + ')');
   const mid = L1a.orbs.filter(o => o.z > 40 && o.z < 100).length;
-  assert(mid >= 6 && mid <= 20, 'L1 mid-track moderate pack (got ' + mid + ')');
+  assert(mid <= 12, 'L1 mid-track not packed (got ' + mid + ')');
 }
-// thorn cap (higher now — still capped)
+// thorn cap low
 {
   const L9 = T.buildLevel(9, 9 * 10007);
   const thorns = L9.hazards.filter(h => h.type === 'thorn').length;
-  assert(thorns <= 26, 'L9 thorn cap ≤26 (got ' + thorns + ')');
-  assert(thorns >= 6, 'L9 has real thorn count (got ' + thorns + ')');
+  assert(thorns <= 8, 'L9 thorn cap ≤8 (got ' + thorns + ')');
 }
 
 const L2 = T.buildLevel(2, 20014);
-assert(L2.hazards.some(h => h.type === 'thorn'), 'L2 has thorns');
-// pits allowed later on L2
-assert(L2.hazards.filter(h => h.type === 'pit').every(h => h.z0 >= 55), 'L2 pits z0>=55');
+assert(L2.hazards.filter(h => h.type === 'pit').length === 0, 'L2 no pits');
+assert(L2.hazards.filter(h => h.type === 'thorn').length <= 4, 'L2 few thorns');
 
 const L3 = T.buildLevel(3, 30021);
-assert(L3.hazards.some(h => h.type === 'pit' || h.type === 'thorn'), 'L3 has hazards');
+assert(L3.hazards.filter(h => h.type === 'thorn').length <= 5, 'L3 few thorns');
 
 for (let L = 1; L <= 12; L++) {
   const lv = T.buildLevel(L, L * 10007);
@@ -360,9 +357,9 @@ assertEq(T.expectedValue(12, 1), 2048, 'L12 end ≈2048');
   assert(c4 >= 2, 'L5 has climb 4s (got ' + c4 + ')');
   assert(c8 >= 1, 'L5 has climb 8s (got ' + c8 + ')');
   assert(c16 >= 1, 'L5 has climb 16s (got ' + c16 + ')');
-  assert(L5.orbs.length >= 30 && L5.orbs.length <= 80, 'L5 moderate field (got ' + L5.orbs.length + ')');
+  assert(L5.orbs.length >= 16 && L5.orbs.length <= 40, 'L5 roomy field (got ' + L5.orbs.length + ')');
   const earlyHigh = L5.orbs.filter(o => o.z < L5.finishZ * 0.15 && o.value >= 128).length;
-  assert(earlyHigh <= 3, 'L5 early track not stacked with 128+ (got ' + earlyHigh + ')');
+  assert(earlyHigh <= 2, 'L5 early track not stacked with 128+ (got ' + earlyHigh + ')');
 }
 // L1 full ladder through 256+ so 512 is reachable
 {

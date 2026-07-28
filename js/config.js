@@ -3,7 +3,7 @@
 
 // ---- Version (MAJOR.MINOR.PATCH) --------------------------------------------
 // Keep CACHE in sw.js in sync: 'orb-merge-run-' + GAME_VERSION
-const GAME_VERSION = '1.2.006';
+const GAME_VERSION = '1.2.007';
 const GAME_VERSION_LABEL = 'v' + GAME_VERSION;
 const GAME_NAME = 'Orb Merge Run';
 
@@ -55,8 +55,8 @@ const THORN_INVULN = 0.55;
 const THORN_DEPTH = 1.0;
 // Cap thorns per level — keep the run spicy (was too empty)
 // index = level, value = max thorn strips
-// Higher caps — dual-side strips between packs (Ball Run cadence)
-const MAX_THORNS_BY_LEVEL = [0, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32];
+// Keep thorns sparse — open road between challenges
+const MAX_THORNS_BY_LEVEL = [0, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8];
 
 // Level length — longer road, sparser content (Ball Run feel)
 const BASE_LEN = 200;

@@ -368,11 +368,14 @@ function overlapsTooClose(inst, orbs, hazards, minSep) {
 function sanitizeForLevel(L, orbs, hazards) {
   for (let i = hazards.length - 1; i >= 0; i--) {
     const h = hazards[i];
-    // L1: thorns ok after intro, no pits yet
+    // L1: no pits; thorns only late
     if (L <= 1 && h.type === 'pit') { hazards.splice(i, 1); continue; }
-    if (L <= 1 && h.type === 'thorn' && h.z < 28) { hazards.splice(i, 1); continue; }
-    // L2: pits only after mid
-    if (L === 2 && h.type === 'pit' && h.z0 < 55) { hazards.splice(i, 1); continue; }
+    if (L <= 1 && h.type === 'thorn' && h.z < 55) { hazards.splice(i, 1); continue; }
+    // L2: no pits, thorns after intro stretch
+    if (L === 2 && h.type === 'pit') { hazards.splice(i, 1); continue; }
+    if (L === 2 && h.type === 'thorn' && h.z < 45) { hazards.splice(i, 1); continue; }
+    // L3: pits only mid+
+    if (L === 3 && h.type === 'pit' && h.z0 < 70) { hazards.splice(i, 1); continue; }
   }
 
   const maxThorns = MAX_THORNS_BY_LEVEL[L] != null
@@ -405,21 +408,20 @@ function clampOrbValuesToCurve(L, orbs, finishZ) {
 }
 
 /**
- * Ball Run layout: modest packs full-width — NOT a carpet of 100 balls.
- * Reference screenshot: ~15–25 visible ahead, scattered L/R with gaps.
- * Target L1 ≈ 35–50 total orbs.
+ * Roomier Ball Run layout — open road, few balls, wide left/right placement.
+ * Target L1 ≈ 18–26 total orbs (not a crowded field).
  */
 function injectMergeLadder(L, orbs, finishZ, rng) {
   const endTier = endTierForLevel(L);
   let injectId = 0;
 
   const climbEnd = finishZ - FINISH_PAD - 4;
-  const climbStart = 12;
-  const LANES = [-3.2, -2.0, -0.8, 0.8, 2.0, 3.2];
+  const climbStart = 14;
+  const LANES = [-3.0, -1.8, 1.8, 3.0];
 
   function tooClose(x, z, minZ, minX) {
-    minZ = minZ == null ? 2.8 : minZ;
-    minX = minX == null ? 1.0 : minX;
+    minZ = minZ == null ? 4.0 : minZ;
+    minX = minX == null ? 1.1 : minX;
     for (let i = 0; i < orbs.length; i++) {
       if (Math.abs(orbs[i].z - z) < minZ && Math.abs(orbs[i].x - x) < minX) return true;
     }
@@ -427,90 +429,77 @@ function injectMergeLadder(L, orbs, finishZ, rng) {
   }
 
   function place(x, z, value) {
-    x = clamp(x, -3.5, 3.5);
+    x = clamp(x, -3.4, 3.4);
     z = clamp(z, climbStart, climbEnd);
-    if (tooClose(x, z, 2.6, 0.95)) {
-      x = clamp(x + (rng() < 0.5 ? 1.1 : -1.1), -3.5, 3.5);
-      if (tooClose(x, z, 2.4, 0.9)) return false;
+    if (tooClose(x, z, 3.5, 1.0)) {
+      x = clamp(x + (rng() < 0.5 ? 1.4 : -1.4), -3.4, 3.4);
+      if (tooClose(x, z, 3.2, 0.95)) return false;
     }
     orbs.push(makeOrb('o_field_' + (injectId++), x, z, value));
     return true;
   }
 
-  function pickLanes(n) {
-    const pool = LANES.slice();
-    for (let i = pool.length - 1; i > 0; i--) {
-      const j = Math.floor(rng() * (i + 1));
-      const tmp = pool[i]; pool[i] = pool[j]; pool[j] = tmp;
-    }
-    return pool.slice(0, Math.min(n, pool.length));
-  }
-
-  // Packs every ~14–20 units: 2–3 balls (readable field, not a carpet)
+  // Sparse packs: 1–2 balls every ~24–32 units
   let z = climbStart;
-  while (z < climbEnd - 6) {
+  while (z < climbEnd - 8) {
     const u = clamp((z - climbStart) / Math.max(1, climbEnd - climbStart), 0, 1);
     const expTier = tierForValue(expectedValue(L, u));
-    const clusterN = 2 + (rng() < 0.45 ? 1 : 0); // 2–3
-    const lanes = pickLanes(clusterN);
+    const clusterN = rng() < 0.55 ? 1 : 2;
+    const used = [];
 
     for (let i = 0; i < clusterN; i++) {
       let tier;
-      const roll = rng();
       if (i === 0) tier = expTier;
-      else if (roll < 0.4) tier = Math.max(0, expTier - 1);
-      else if (roll < 0.65) tier = Math.min(endTier, expTier + 1);
-      else tier = expTier;
+      else tier = rng() < 0.5 ? Math.max(0, expTier - 1) : Math.min(endTier, expTier + 1);
 
-      const oz = z + (rng() - 0.5) * 2.0;
-      const ox = lanes[i] + (rng() - 0.5) * 0.3;
-      place(ox, oz, valueForTier(tier));
+      let lane = LANES[Math.floor(rng() * LANES.length)];
+      // Prefer opposite side for second ball
+      if (i === 1 && used.length) {
+        lane = used[0] > 0 ? -Math.abs(LANES[0]) : Math.abs(LANES[LANES.length - 1]);
+        if (rng() < 0.35) lane = LANES[Math.floor(rng() * LANES.length)];
+      }
+      used.push(lane);
+      place(lane + (rng() - 0.5) * 0.25, z + (rng() - 0.5) * 1.5, valueForTier(tier));
     }
 
-    z += 14 + rng() * 6;
+    z += 24 + rng() * 10;
   }
 
-  // Climb guarantee — few copies, spread wide
+  // Climb path only — one of each tier (two for 2s)
   const span = climbEnd - climbStart;
   for (let tier = 0; tier <= endTier; tier++) {
     const value = valueForTier(tier);
-    const u0 = tier / (endTier + 1.1);
-    const u1 = (tier + 0.85) / (endTier + 1.1);
-    const z0 = climbStart + u0 * span;
-    const z1 = climbStart + u1 * span;
-    const copies = tier <= 1 ? 2 : 1;
-    for (let c = 0; c < copies; c++) {
-      const t = (c + 0.4) / Math.max(1, copies);
-      const zz = lerp(z0, z1, t);
-      const laneIdx = (tier * 2 + c * 3) % LANES.length;
-      place(LANES[laneIdx], zz, value);
+    const u = (tier + 0.45) / (endTier + 1.05);
+    const zz = climbStart + u * span;
+    const lane = LANES[(tier * 2) % LANES.length];
+    place(lane, zz, value);
+    if (tier === 0) {
+      place(-lane, zz + 8, value);
     }
   }
 }
 
 /**
- * A few early 2s so the run always starts cleanly.
+ * Two early 2s so the run always starts.
  */
 function ensureEarlyMerges(L, orbs) {
   function countEarlyTwos() {
     let n = 0;
     for (let i = 0; i < orbs.length; i++) {
-      if (orbs[i].value === 2 && orbs[i].z < 45) n++;
+      if (orbs[i].value === 2 && orbs[i].z < 40) n++;
     }
     return n;
   }
-  const need = 3;
+  const need = 2;
   const slots = [
-    { x: -2.4, z: 12 },
-    { x: 2.5, z: 20 },
-    { x: -1.6, z: 30 },
-    { x: 2.0, z: 40 },
+    { x: -2.2, z: 14 },
+    { x: 2.4, z: 26 },
   ];
   for (let s = 0; s < slots.length && countEarlyTwos() < need; s++) {
     const slot = slots[s];
     let blocked = false;
     for (let i = 0; i < orbs.length; i++) {
-      if (Math.abs(orbs[i].z - slot.z) < 2.2 && Math.abs(orbs[i].x - slot.x) < 1.0) {
+      if (Math.abs(orbs[i].z - slot.z) < 2.5 && Math.abs(orbs[i].x - slot.x) < 1.1) {
         blocked = true;
         break;
       }
@@ -521,85 +510,75 @@ function ensureEarlyMerges(L, orbs) {
 }
 
 /**
- * Spike strips — dual sides with center open, between packs (not every meter).
+ * Few obstacle beats — mostly open road.
  */
 function injectObstacleCourse(L, hazards, finishZ, rng) {
-  const start = 28;
-  const end = finishZ - FINISH_PAD - 8;
-  if (end <= start + 10) return;
+  // L1: very few thorns, late
+  const start = L <= 1 ? 55 : 40;
+  const end = finishZ - FINISH_PAD - 12;
+  if (end <= start + 15) return;
 
-  let z = start + rng() * 6;
+  let z = start + rng() * 8;
   let hid = 0;
-  const spacing = L <= 2 ? 22 : (L <= 5 ? 18 : 15);
+  // Wide gaps between hazard beats
+  const spacing = L <= 2 ? 42 : (L <= 5 ? 34 : 28);
 
   while (z < end) {
     const pattern = rng();
 
-    if (pattern < 0.45) {
-      // Dual side spikes (center open) — classic Ball Run look
-      hazards.push({
-        id: 'obs_t_' + (hid++),
-        type: 'thorn',
-        x0: -4.5, x1: -1.5,
-        z: z, depth: 1.0, consumed: false,
-      });
-      hazards.push({
-        id: 'obs_t_' + (hid++),
-        type: 'thorn',
-        x0: 1.5, x1: 4.5,
-        z: z, depth: 1.0, consumed: false,
-      });
-    } else if (pattern < 0.7) {
-      // One side only
+    if (pattern < 0.55) {
+      // One side only (most common)
       const left = rng() < 0.5;
       hazards.push({
         id: 'obs_t_' + (hid++),
         type: 'thorn',
-        x0: left ? -4.5 : 0.9,
-        x1: left ? -0.9 : 4.5,
-        z: z, depth: 1.05, consumed: false,
+        x0: left ? -4.5 : 1.0,
+        x1: left ? -1.0 : 4.5,
+        z: z, depth: 1.0, consumed: false,
       });
-    } else if (pattern < 0.88) {
-      // Staggered pair at two z depths
+    } else if (pattern < 0.85) {
+      // Dual sides — center open (rare-ish)
       hazards.push({
         id: 'obs_t_' + (hid++),
         type: 'thorn',
-        x0: -4.5, x1: -1.3,
+        x0: -4.5, x1: -1.6,
         z: z, depth: 1.0, consumed: false,
       });
       hazards.push({
         id: 'obs_t_' + (hid++),
         type: 'thorn',
-        x0: 1.3, x1: 4.5,
-        z: z + 5, depth: 1.0, consumed: false,
+        x0: 1.6, x1: 4.5,
+        z: z, depth: 1.0, consumed: false,
       });
     } else {
-      // Thin center spikes — dodge left or right
+      // Single thin side cluster
+      const left = rng() < 0.5;
       hazards.push({
         id: 'obs_t_' + (hid++),
         type: 'thorn',
-        x0: -1.15, x1: 1.15,
+        x0: left ? -4.5 : 1.5,
+        x1: left ? -1.5 : 4.5,
         z: z, depth: 0.95, consumed: false,
       });
     }
 
-    // Pits start L2, more common later
-    if (L >= 2 && rng() < (L <= 3 ? 0.28 : 0.42)) {
-      const pitZ = z + 3 + rng() * 3;
+    // Pits rare, L3+
+    if (L >= 3 && rng() < 0.22) {
+      const pitZ = z + 4 + rng() * 3;
       if (pitZ < end) {
         const left = rng() < 0.5;
         hazards.push({
           id: 'obs_p_' + (hid++),
           type: 'pit',
-          x0: left ? -5 : 0.45,
-          x1: left ? -0.45 : 5,
+          x0: left ? -5 : 0.5,
+          x1: left ? -0.5 : 5,
           z0: pitZ,
-          z1: pitZ + 4.5 + rng() * 2.5,
+          z1: pitZ + 4.5 + rng() * 2,
         });
       }
     }
 
-    z += spacing + rng() * 5;
+    z += spacing + rng() * 10;
   }
 }
 
@@ -676,36 +655,25 @@ function buildLevel(L, seed) {
   const hazards = [];
   const segmentsUsed = [];
 
-  // Light template seasoning for track-width changes / set pieces,
-  // but the MAIN density comes from injectMergeLadder (Ball Run field).
-  let z = 40;
-  const packEnd = finishZ - FINISH_PAD - 20;
-  let stallGuard = 0;
+  // Very light template seasoning (track width only) — few extra hazards
+  let z = 60;
+  const packEnd = finishZ - FINISH_PAD - 30;
   let placed = 0;
-  while (z < packEnd && placed < 6) {
+  while (z < packEnd && placed < 2) {
     const remaining = packEnd - z;
     const eligible = TEMPLATES.filter(function (t) {
       if (t.id === 'merge_lane_intro' || t.id === 'safe_breather' || t.id === 'wide_safe') {
         return false;
       }
-      // Prefer hazard / shape templates — orbs come from the field injector
       return t.minLevel <= L && t.length <= remaining && t.hazards && t.hazards.length > 0;
     });
     if (eligible.length === 0) break;
 
     const t = weightedPick(eligible, rng);
-    // Instantiate but strip template orbs — field injector owns density/layout
     const inst = instantiateTemplate(t, z, L, rng);
-    inst.orbs = [];
-    if (overlapsTooClose(inst, orbs, hazards, 2.5)) {
-      z += 5;
-      stallGuard++;
-      if (stallGuard > 30) break;
-      continue;
-    }
-    stallGuard = 0;
+    inst.orbs = []; // field injector owns balls
     appendInst(inst, orbs, hazards, segmentsUsed);
-    z += t.length + lerp(8, 16, rng());
+    z += t.length + lerp(20, 35, rng());
     placed++;
   }
 

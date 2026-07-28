@@ -324,9 +324,9 @@ function drawFinish(finishZ, zn, zf) {
 }
 
 /**
- * Draw a glossy numbered orb with optional roll stripes.
- * opts.rollAngle — radians of spin (body rolls; number stays upright for read).
- * opts.y — world Y of sphere center (defaults to radius; falling uses lower).
+ * Draw a glossy numbered orb that actually looks like it spins.
+ * Beach-ball gores rotate with rollAngle (no scanline stripes).
+ * Number stays upright for readability.
  */
 function drawOrbAt(x, y, z, value, radius, opts) {
   opts = opts || {};
@@ -355,59 +355,98 @@ function drawOrbAt(x, y, z, value, radius, opts) {
   }
 
   const roll = opts.rollAngle || 0;
+  const yaw = opts.rollYaw || 0;
+  const dark = shadeColor(fill, -42);
+  const light = shadeColor(fill, 28);
 
-  // body
-  const hlOffX = -r * 0.35 + Math.sin(roll) * r * 0.12;
-  const hlOffY = -r * 0.4 + Math.cos(roll) * r * 0.08;
-  const grd = ctx.createRadialGradient(
-    sx + hlOffX, sy + hlOffY, r * 0.1,
-    sx, sy, r
-  );
-  grd.addColorStop(0, '#ffffff');
-  grd.addColorStop(0.2, fill);
-  grd.addColorStop(0.72, fill);
-  grd.addColorStop(1, shadeColor(fill, -38));
-  ctx.fillStyle = grd;
+  // Flat base disc
+  ctx.fillStyle = fill;
   ctx.beginPath();
   ctx.arc(sx, sy, r, 0, Math.PI * 2);
   ctx.fill();
 
-  // Rolling latitude stripes (clipped to the sphere) — this is the "it rolls" read
-  if (r >= 4) {
+  // Spinning beach-ball gores (this is the roll read — panels turn, not scanlines)
+  if (r >= 5) {
     ctx.save();
     ctx.beginPath();
-    ctx.arc(sx, sy, r * 0.98, 0, Math.PI * 2);
+    ctx.arc(sx, sy, r * 0.99, 0, Math.PI * 2);
     ctx.clip();
 
-    const stripeColor = 'rgba(0,0,0,0.18)';
-    const stripeHi = 'rgba(255,255,255,0.22)';
-    // 3 bands that travel with rollAngle (forward roll around X axis in screen space ≈ vertical motion)
-    for (let k = -2; k <= 2; k++) {
-      // band center offset in ball-local "latitude"
-      const phase = roll + k * 0.85;
-      const ny = Math.sin(phase); // -1..1 across the face
-      if (Math.abs(ny) > 0.92) continue;
-      const bandY = sy + ny * r * 0.92;
-      const halfW = Math.sqrt(Math.max(0, 1 - ny * ny)) * r * 0.95;
-      const bandH = Math.max(1.2, r * 0.1 * Math.cos(phase * 0.5 + 0.2));
-      ctx.fillStyle = (k + 2) % 2 === 0 ? stripeColor : stripeHi;
+    const panels = 6;
+    const spin = roll + yaw * 0.65;
+    for (let i = 0; i < panels; i++) {
+      const a0 = spin + (i / panels) * Math.PI * 2;
+      const a1 = spin + ((i + 1) / panels) * Math.PI * 2;
       ctx.beginPath();
-      ctx.ellipse(sx, bandY, halfW, bandH, 0, 0, Math.PI * 2);
+      ctx.moveTo(sx, sy);
+      ctx.arc(sx, sy, r, a0, a1);
+      ctx.closePath();
+      if (i % 2 === 0) {
+        ctx.fillStyle = dark;
+        ctx.globalAlpha = 0.38;
+      } else {
+        ctx.fillStyle = light;
+        ctx.globalAlpha = 0.22;
+      }
       ctx.fill();
     }
+    ctx.globalAlpha = 1;
 
-    // vertical meridian wobble for lateral knock roll
-    if (opts.sideRoll) {
-      const mx = Math.sin(roll * 0.7) * r * 0.55;
-      ctx.strokeStyle = 'rgba(255,255,255,0.15)';
-      ctx.lineWidth = Math.max(1, r * 0.06);
+    // Seam lines between panels (reads as a real ball spinning)
+    ctx.strokeStyle = 'rgba(0,0,0,0.18)';
+    ctx.lineWidth = Math.max(1, r * 0.035);
+    for (let i = 0; i < panels; i++) {
+      const a = spin + (i / panels) * Math.PI * 2;
       ctx.beginPath();
-      ctx.ellipse(sx + mx * 0.15, sy, r * 0.18, r * 0.9, 0, 0, Math.PI * 2);
+      ctx.moveTo(sx, sy);
+      ctx.lineTo(sx + Math.cos(a) * r, sy + Math.sin(a) * r);
       ctx.stroke();
     }
 
+    // Soft “equator” oval that drifts with roll — one thick band, not many thin lines
+    const tilt = spin * 0.5;
+    ctx.strokeStyle = 'rgba(255,255,255,0.28)';
+    ctx.lineWidth = Math.max(1.5, r * 0.09);
+    ctx.beginPath();
+    ctx.ellipse(
+      sx + Math.sin(tilt) * r * 0.08,
+      sy + Math.cos(tilt) * r * 0.06,
+      r * 0.78,
+      r * 0.32,
+      tilt * 0.35,
+      0,
+      Math.PI * 2
+    );
+    ctx.stroke();
+
     ctx.restore();
   }
+
+  // Spherical shading overlay (fixed light, keeps it looking round)
+  const shade = ctx.createRadialGradient(
+    sx - r * 0.32, sy - r * 0.38, r * 0.05,
+    sx, sy, r
+  );
+  shade.addColorStop(0, 'rgba(255,255,255,0.55)');
+  shade.addColorStop(0.28, 'rgba(255,255,255,0.12)');
+  shade.addColorStop(0.7, 'rgba(0,0,0,0)');
+  shade.addColorStop(1, 'rgba(0,0,0,0.35)');
+  ctx.fillStyle = shade;
+  ctx.beginPath();
+  ctx.arc(sx, sy, r, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Specular hot-spot (orbits slightly with spin)
+  const hx = sx - r * 0.28 + Math.cos(roll * 0.7) * r * 0.06;
+  const hy = sy - r * 0.32 + Math.sin(roll * 0.7) * r * 0.05;
+  const spec = ctx.createRadialGradient(hx, hy, 0, hx, hy, r * 0.28);
+  spec.addColorStop(0, 'rgba(255,255,255,0.85)');
+  spec.addColorStop(0.45, 'rgba(255,255,255,0.2)');
+  spec.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = spec;
+  ctx.beginPath();
+  ctx.arc(sx, sy, r, 0, Math.PI * 2);
+  ctx.fill();
 
   // rim glow
   ctx.strokeStyle = col.glow || fill;
@@ -592,8 +631,8 @@ function drawWorld(player, levelData, dt) {
       drawOrbAt(o.x, oy, o.z, o.value, o.radius, {
         debugHit: DEBUG,
         rollAngle: o.rollAngle || 0,
+        rollYaw: o.rollYaw || 0,
         falling: !!o.falling,
-        sideRoll: Math.abs(o.vx || 0) > 0.3,
       });
     }
   }
@@ -606,6 +645,7 @@ function drawWorld(player, levelData, dt) {
     drawOrbAt(player.x, py, player.z, player.value, drawR, {
       debugHit: DEBUG,
       rollAngle: player.rollAngle || 0,
+      rollYaw: player.rollYaw || 0,
       falling: !!player.falling,
     });
   }

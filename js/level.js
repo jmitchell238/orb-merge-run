@@ -47,205 +47,228 @@ function maxValueAt(L, z, finishZ) {
   return valueForTier(Math.min(10, expTier + 1));
 }
 
-// ---- Templates (exactly 20) — sparse: 1–3 orbs each, lots of open road -------
+// ---- Templates (exactly 20) — zigzag orbs + real hazards -----------------------
 
 const TEMPLATES = [
   {
     id: 'merge_lane_intro',
-    length: 30, minLevel: 1, weight: 10,
+    length: 32, minLevel: 1, weight: 8,
     orbs: [
-      { dx: 0, dz: 10, valueMode: 'fixed', value: 2 },
-      { dx: 0.25, dz: 20, valueMode: 'fixed', value: 2 },
+      { dx: -2.2, dz: 10, valueMode: 'fixed', value: 2 },
+      { dx: 2.4, dz: 20, valueMode: 'fixed', value: 2 },
     ],
     hazards: [],
   },
   {
     id: 'straight_orbs',
-    length: 36, minLevel: 1, weight: 8,
+    length: 36, minLevel: 1, weight: 5,
     orbs: [
-      { dx: -0.8, dz: 10, valueMode: 'expected', tierDelta: 0 },
-      { dx: 0.9, dz: 22, valueMode: 'expected', tierDelta: 0 },
-      { dx: 0.0, dz: 30, valueMode: 'expected', tierDelta: -1 },
+      { dx: -2.8, dz: 10, valueMode: 'expected', tierDelta: 0 },
+      { dx: 2.6, dz: 22, valueMode: 'expected', tierDelta: 0 },
+      { dx: -1.5, dz: 30, valueMode: 'expected', tierDelta: -1 },
     ],
-    hazards: [],
+    hazards: [
+      { type: 'thorn', dz: 16, depth: 1.0, x0: 1.4, x1: 4.5 },
+    ],
   },
   {
     id: 'safe_breather',
-    length: 28, minLevel: 1, weight: 9,
+    length: 26, minLevel: 1, weight: 3,
     orbs: [
-      { dx: 0.3, dz: 14, valueMode: 'expected', tierDelta: 0 },
+      { dx: 2.0, dz: 12, valueMode: 'expected', tierDelta: 0 },
     ],
     hazards: [],
   },
   {
     id: 'wide_safe',
-    length: 24, minLevel: 1, weight: 8,
+    length: 24, minLevel: 1, weight: 2,
     orbs: [
-      { dx: 0, dz: 12, valueMode: 'expected', tierDelta: 0 },
+      { dx: -2.5, dz: 12, valueMode: 'expected', tierDelta: 0 },
     ],
     hazards: [],
   },
   {
     id: 'thorn_strip_right',
-    length: 32, minLevel: 2, weight: 5,
+    length: 32, minLevel: 1, weight: 8,
     orbs: [
-      { dx: -1.8, dz: 14, valueMode: 'expected', tierDelta: 0 },
+      { dx: -2.6, dz: 14, valueMode: 'expected', tierDelta: 0 },
     ],
     hazards: [
-      { type: 'thorn', dz: 16, depth: 1.0, x0: 0.8, x1: 4.5 },
+      { type: 'thorn', dz: 12, depth: 1.1, x0: 0.9, x1: 4.5 },
     ],
   },
   {
     id: 'thorn_strip_left',
-    length: 32, minLevel: 2, weight: 5,
+    length: 32, minLevel: 1, weight: 8,
     orbs: [
-      { dx: 1.8, dz: 14, valueMode: 'expected', tierDelta: 0 },
+      { dx: 2.6, dz: 14, valueMode: 'expected', tierDelta: 0 },
     ],
     hazards: [
-      { type: 'thorn', dz: 16, depth: 1.0, x0: -4.5, x1: -0.8 },
+      { type: 'thorn', dz: 12, depth: 1.1, x0: -4.5, x1: -0.9 },
     ],
   },
   {
     id: 'offset_pair',
-    length: 30, minLevel: 2, weight: 5,
+    length: 30, minLevel: 1, weight: 6,
     orbs: [
-      { dx: -1.8, dz: 12, valueMode: 'expected', tierDelta: 0 },
-      { dx: 1.8, dz: 12, valueMode: 'expected', tierDelta: 0 },
+      { dx: -3.0, dz: 10, valueMode: 'expected', tierDelta: 0 },
+      { dx: 3.0, dz: 18, valueMode: 'expected', tierDelta: 0 },
     ],
-    hazards: [],
+    hazards: [
+      { type: 'thorn', dz: 14, depth: 0.9, x0: -1.0, x1: 1.0 },
+    ],
   },
   {
     id: 'zigzag_orbs',
-    length: 36, minLevel: 3, weight: 5,
+    length: 38, minLevel: 1, weight: 9,
     orbs: [
-      { dx: -1.8, dz: 8, valueMode: 'expected', tierDelta: 0 },
-      { dx: 1.8, dz: 20, valueMode: 'expected', tierDelta: 0 },
-      { dx: 0, dz: 30, valueMode: 'expected', tierDelta: 0 },
+      { dx: -3.0, dz: 8, valueMode: 'expected', tierDelta: 0 },
+      { dx: 3.0, dz: 18, valueMode: 'expected', tierDelta: 0 },
+      { dx: -2.4, dz: 28, valueMode: 'expected', tierDelta: 0 },
     ],
-    hazards: [],
+    hazards: [
+      { type: 'thorn', dz: 13, depth: 1.0, x0: 1.5, x1: 4.5 },
+      { type: 'thorn', dz: 23, depth: 1.0, x0: -4.5, x1: -1.5 },
+    ],
   },
   {
     id: 'merge_ladder',
-    length: 34, minLevel: 1, weight: 8,
+    length: 34, minLevel: 1, weight: 6,
     orbs: [
-      { dx: 0, dz: 8, valueMode: 'fixed', value: 2 },
-      { dx: 0.2, dz: 18, valueMode: 'fixed', value: 2 },
-      { dx: 0, dz: 28, valueMode: 'fixed', value: 4 },
+      { dx: -2.5, dz: 8, valueMode: 'fixed', value: 2 },
+      { dx: 2.8, dz: 18, valueMode: 'fixed', value: 2 },
+      { dx: -2.2, dz: 28, valueMode: 'fixed', value: 4 },
     ],
     hazards: [],
   },
   {
     id: 's_curve_orbs',
-    length: 38, minLevel: 3, weight: 4,
+    length: 40, minLevel: 2, weight: 7,
     orbs: [
-      { dx: -1.6, dz: 8, valueMode: 'expected', tierDelta: 0 },
-      { dx: 1.6, dz: 20, valueMode: 'expected', tierDelta: 0 },
-      { dx: 0, dz: 32, valueMode: 'expected', tierDelta: 0 },
+      { dx: -3.0, dz: 8, valueMode: 'expected', tierDelta: 0 },
+      { dx: 0.5, dz: 18, valueMode: 'expected', tierDelta: 0 },
+      { dx: 3.0, dz: 28, valueMode: 'expected', tierDelta: 0 },
     ],
-    hazards: [],
+    hazards: [
+      { type: 'thorn', dz: 13, depth: 1.0, x0: 1.8, x1: 4.5 },
+      { type: 'thorn', dz: 24, depth: 1.0, x0: -4.5, x1: -1.8 },
+    ],
   },
   {
     id: 'gap_left_bridge',
-    length: 38, minLevel: 4, weight: 4,
+    length: 36, minLevel: 2, weight: 6,
     trackHalf: 5,
     orbs: [
-      { dx: 1.6, dz: 16, valueMode: 'expected', tierDelta: 0 },
+      { dx: 2.4, dz: 16, valueMode: 'expected', tierDelta: 0 },
     ],
     hazards: [
-      { type: 'pit', dz: 12, length: 6, x0: -5, x1: -0.5 },
+      { type: 'pit', dz: 10, length: 7, x0: -5, x1: -0.3 },
     ],
   },
   {
     id: 'gap_right_bridge',
-    length: 38, minLevel: 4, weight: 4,
+    length: 36, minLevel: 2, weight: 6,
     trackHalf: 5,
     orbs: [
-      { dx: -1.6, dz: 16, valueMode: 'expected', tierDelta: 0 },
+      { dx: -2.4, dz: 16, valueMode: 'expected', tierDelta: 0 },
     ],
     hazards: [
-      { type: 'pit', dz: 12, length: 6, x0: 0.5, x1: 5 },
+      { type: 'pit', dz: 10, length: 7, x0: 0.3, x1: 5 },
     ],
   },
   {
     id: 'narrow_bridge',
-    length: 30, minLevel: 5, weight: 4,
-    trackHalf: 3.2,
+    length: 30, minLevel: 3, weight: 6,
+    trackHalf: 2.9,
     orbs: [
-      { dx: 0, dz: 14, valueMode: 'expected', tierDelta: 0 },
+      { dx: 0.4, dz: 14, valueMode: 'expected', tierDelta: 0 },
     ],
     hazards: [],
   },
   {
     id: 'gap_center',
-    length: 34, minLevel: 5, weight: 3,
+    length: 34, minLevel: 3, weight: 5,
     orbs: [
-      { dx: -2.6, dz: 16, valueMode: 'expected', tierDelta: 0 },
-      { dx: 2.6, dz: 24, valueMode: 'expected', tierDelta: 0 },
+      { dx: -3.0, dz: 14, valueMode: 'expected', tierDelta: 0 },
+      { dx: 3.0, dz: 24, valueMode: 'expected', tierDelta: 0 },
     ],
     hazards: [
-      { type: 'pit', dz: 12, length: 5, x0: -1.4, x1: 1.4 },
+      { type: 'pit', dz: 10, length: 6, x0: -1.5, x1: 1.5 },
     ],
   },
   {
     id: 'glass_walls_visual',
-    length: 32, minLevel: 6, weight: 3,
+    length: 32, minLevel: 3, weight: 4,
     orbs: [
-      { dx: 0, dz: 16, valueMode: 'expected', tierDelta: 0 },
+      { dx: -2.8, dz: 12, valueMode: 'expected', tierDelta: 0 },
+      { dx: 2.8, dz: 22, valueMode: 'expected', tierDelta: 0 },
     ],
-    hazards: [],
+    hazards: [
+      { type: 'thorn', dz: 16, depth: 1.0, x0: -1.2, x1: 1.2 },
+    ],
   },
   {
     id: 'speed_lane',
-    length: 42, minLevel: 6, weight: 3,
+    length: 40, minLevel: 4, weight: 4,
     orbs: [
-      { dx: -1.2, dz: 12, valueMode: 'expected', tierDelta: 0 },
-      { dx: 1.2, dz: 28, valueMode: 'expected', tierDelta: 0 },
+      { dx: -3.0, dz: 10, valueMode: 'expected', tierDelta: 0 },
+      { dx: 3.0, dz: 22, valueMode: 'expected', tierDelta: 0 },
+      { dx: -2.0, dz: 34, valueMode: 'expected', tierDelta: 0 },
     ],
-    hazards: [],
+    hazards: [
+      { type: 'thorn', dz: 16, depth: 1.0, x0: 1.2, x1: 4.5 },
+      { type: 'thorn', dz: 28, depth: 1.0, x0: -4.5, x1: -1.2 },
+    ],
   },
   {
     id: 'double_thorn_stagger',
-    length: 36, minLevel: 7, weight: 2,
+    length: 36, minLevel: 2, weight: 7,
     orbs: [
-      { dx: 0, dz: 10, valueMode: 'expected', tierDelta: 0 },
-      { dx: 0, dz: 26, valueMode: 'expected', tierDelta: 0 },
+      { dx: 2.5, dz: 10, valueMode: 'expected', tierDelta: 0 },
+      { dx: -2.5, dz: 26, valueMode: 'expected', tierDelta: 0 },
     ],
     hazards: [
-      { type: 'thorn', dz: 14, depth: 1.0, x0: -4.5, x1: -1.4 },
-      { type: 'thorn', dz: 22, depth: 1.0, x0: 1.4, x1: 4.5 },
+      { type: 'thorn', dz: 8, depth: 1.0, x0: -4.5, x1: -1.2 },
+      { type: 'thorn', dz: 20, depth: 1.0, x0: 1.2, x1: 4.5 },
     ],
   },
   {
     id: 'dense_mix',
-    // still sparse — name kept for template count / ids
-    length: 36, minLevel: 8, weight: 3,
+    length: 38, minLevel: 4, weight: 5,
     orbs: [
-      { dx: -1.2, dz: 8, valueMode: 'expected', tierDelta: 0 },
-      { dx: 1.2, dz: 18, valueMode: 'expected', tierDelta: 0 },
-      { dx: 0, dz: 28, valueMode: 'expected', tierDelta: 0 },
+      { dx: -3.0, dz: 8, valueMode: 'expected', tierDelta: 0 },
+      { dx: 2.8, dz: 16, valueMode: 'expected', tierDelta: 0 },
+      { dx: -2.2, dz: 26, valueMode: 'expected', tierDelta: 0 },
     ],
-    hazards: [],
+    hazards: [
+      { type: 'pit', dz: 12, length: 5, x0: 0.6, x1: 5 },
+      { type: 'thorn', dz: 22, depth: 1.0, x0: -4.5, x1: -1.4 },
+    ],
   },
   {
     id: 'thorn_gauntlet',
-    length: 38, minLevel: 9, weight: 2,
+    length: 40, minLevel: 3, weight: 6,
     orbs: [
-      { dx: 0, dz: 12, valueMode: 'expected', tierDelta: 0 },
-      { dx: 0, dz: 28, valueMode: 'expected', tierDelta: 0 },
+      { dx: 0.0, dz: 10, valueMode: 'expected', tierDelta: 0 },
+      { dx: -2.8, dz: 22, valueMode: 'expected', tierDelta: 0 },
+      { dx: 2.8, dz: 32, valueMode: 'expected', tierDelta: 0 },
     ],
     hazards: [
-      { type: 'thorn', dz: 16, depth: 1.0, x0: 1.6, x1: 4.5 },
-      { type: 'thorn', dz: 24, depth: 1.0, x0: -4.5, x1: -1.6 },
+      { type: 'thorn', dz: 14, depth: 1.0, x0: 1.4, x1: 4.5 },
+      { type: 'thorn', dz: 24, depth: 1.0, x0: -4.5, x1: -1.4 },
+      { type: 'thorn', dz: 30, depth: 0.9, x0: -1.0, x1: 1.0 },
     ],
   },
   {
     id: 'finale_high_tease',
-    length: 34, minLevel: 8, weight: 3,
+    length: 34, minLevel: 4, weight: 4,
     orbs: [
-      { dx: 0, dz: 10, valueMode: 'expected', tierDelta: 0 },
-      { dx: 0.8, dz: 22, valueMode: 'expected', tierDelta: 0 },
+      { dx: -2.6, dz: 10, valueMode: 'expected', tierDelta: 0 },
+      { dx: 2.8, dz: 22, valueMode: 'expected', tierDelta: 0 },
     ],
-    hazards: [],
+    hazards: [
+      { type: 'pit', dz: 14, length: 5, x0: -5, x1: -0.8 },
+    ],
   },
 ];
 
@@ -350,13 +373,11 @@ function sanitizeForLevel(L, orbs, hazards) {
   for (let i = hazards.length - 1; i >= 0; i--) {
     const h = hazards[i];
     if (h.type === 'bonus') continue;
-    if (L <= 1 && (h.type === 'thorn' || h.type === 'pit')) {
-      hazards.splice(i, 1);
-      continue;
-    }
-    if (L === 2 && h.type === 'pit') { hazards.splice(i, 1); continue; }
-    if (L === 2 && h.type === 'thorn' && h.z < 50) { hazards.splice(i, 1); continue; }
-    if (L === 3 && h.type === 'pit') { hazards.splice(i, 1); continue; }
+    // L1: thorns ok after intro, no pits yet
+    if (L <= 1 && h.type === 'pit') { hazards.splice(i, 1); continue; }
+    if (L <= 1 && h.type === 'thorn' && h.z < 28) { hazards.splice(i, 1); continue; }
+    // L2: pits only after mid
+    if (L === 2 && h.type === 'pit' && h.z0 < 55) { hazards.splice(i, 1); continue; }
   }
 
   const maxThorns = MAX_THORNS_BY_LEVEL[L] != null
@@ -389,96 +410,98 @@ function clampOrbValuesToCurve(L, orbs, finishZ) {
 }
 
 /**
- * Progressive climb spine — Ball Run style.
- * For each tier place a *small* number of center-lane matches in sequence:
- *   a few 2s → a few 4s → a few 8s → …
- * This is the real path to 256/512, not a dense field of teases.
+ * Progressive climb spine — zigzag lanes, never a center line.
  * Every tier 0..endTier is guaranteed at least once.
  */
 function injectMergeLadder(L, orbs, finishZ, rng) {
   const endTier = endTierForLevel(L);
   let injectId = 0;
 
-  // Climb zone ends before the bonus wells
   const climbEnd = finishZ - FINISH_PAD - BONUS_ZONE_LEN - 4;
   const climbStart = 12;
   const span = Math.max(40, climbEnd - climbStart);
 
+  // Wide lane set — force steering between left / mid / right
+  const LANES = [-3.2, -2.0, -0.8, 0.8, 2.0, 3.2];
+  let laneCursor = Math.floor(rng() * LANES.length);
+
   function tooClose(x, z, minZ, minX) {
-    minZ = minZ == null ? 2.6 : minZ;
-    minX = minX == null ? 1.0 : minX;
+    minZ = minZ == null ? 2.4 : minZ;
+    minX = minX == null ? 0.95 : minX;
     for (let i = 0; i < orbs.length; i++) {
       if (Math.abs(orbs[i].z - z) < minZ && Math.abs(orbs[i].x - x) < minX) return true;
     }
     return false;
   }
 
+  function nextLane() {
+    // Jump 2–3 lanes so consecutive orbs are clearly offset
+    laneCursor = (laneCursor + 2 + Math.floor(rng() * 2)) % LANES.length;
+    return LANES[laneCursor];
+  }
+
   function forcePlace(x, z, value) {
-    // Try preferred spot, then nudge around until it fits
     const attempts = [
       [x, z],
-      [x + 0.7, z],
-      [x - 0.7, z],
-      [0, z],
-      [x, z + 1.5],
-      [x, z - 1.5],
-      [0.4, z + 2.2],
-      [-0.4, z + 2.2],
+      [x + 0.9, z],
+      [x - 0.9, z],
+      [nextLane(), z],
+      [x, z + 1.8],
+      [x, z - 1.4],
+      [nextLane(), z + 2.4],
     ];
     for (let a = 0; a < attempts.length; a++) {
-      let px = clamp(attempts[a][0], -2.4, 2.4);
-      let pz = clamp(attempts[a][1], climbStart, climbEnd);
-      if (!tooClose(px, pz, 2.2, 0.9)) {
+      const px = clamp(attempts[a][0], -3.4, 3.4);
+      const pz = clamp(attempts[a][1], climbStart, climbEnd);
+      if (!tooClose(px, pz, 2.0, 0.85)) {
         orbs.push(makeOrb('o_ladder_' + (injectId++), px, pz, value));
         return true;
       }
     }
-    // Last resort: place anyway slightly off center (may be tight)
-    orbs.push(makeOrb('o_ladder_' + (injectId++), clamp(x, -2, 2), clamp(z, climbStart, climbEnd), value));
+    orbs.push(makeOrb('o_ladder_' + (injectId++), clamp(x, -3.2, 3.2), clamp(z, climbStart, climbEnd), value));
     return true;
   }
 
   for (let tier = 0; tier <= endTier; tier++) {
     const value = valueForTier(tier);
-    // Band for this tier
     const u0 = tier / (endTier + 1.05);
     const u1 = (tier + 0.9) / (endTier + 1.05);
     const z0 = climbStart + u0 * span;
     const z1 = climbStart + u1 * span;
 
-    // Sparse: early tiers a few matches; late tiers 1–2
     let count;
     if (tier <= 1) count = 3;
     else if (tier <= 4) count = 2;
-    else count = 2; // always ≥2 so one miss doesn't soft-lock the climb
+    else count = 2;
 
     for (let p = 0; p < count; p++) {
       const t = (p + 0.4) / Math.max(1, count);
       const z = lerp(z0, z1, t);
-      const side = (p % 2 === 0 ? 1 : -1) * (0.2 + 0.25 * (p % 3));
-      forcePlace(side, z, value);
+      // zig-zag across the full track width
+      const x = nextLane() + (rng() - 0.5) * 0.35;
+      forcePlace(x, z, value);
     }
   }
 }
 
 /**
- * A few guaranteed early 2s near center — just enough to start the climb.
+ * Guaranteed early 2s in a zigzag — not stacked on center.
  */
 function ensureEarlyMerges(L, orbs) {
   function countEarlyTwos() {
     let n = 0;
     for (let i = 0; i < orbs.length; i++) {
       const o = orbs[i];
-      if (o.value === 2 && o.z < 55 && Math.abs(o.x) < 1.6) n++;
+      if (o.value === 2 && o.z < 60) n++;
     }
     return n;
   }
   const need = 3;
   const slots = [
-    { x: 0, z: 12 },
-    { x: 0.25, z: 22 },
-    { x: -0.2, z: 34 },
-    { x: 0.15, z: 46 },
+    { x: -2.6, z: 12 },
+    { x: 2.8, z: 24 },
+    { x: -2.2, z: 38 },
+    { x: 2.4, z: 50 },
   ];
   for (let s = 0; s < slots.length && countEarlyTwos() < need; s++) {
     const slot = slots[s];
@@ -491,6 +514,66 @@ function ensureEarlyMerges(L, orbs) {
     }
     if (blocked) continue;
     orbs.push(makeOrb('o_early_' + s, slot.x, slot.z, 2));
+  }
+}
+
+/**
+ * Extra hazard gauntlet between merge beats so the road isn't empty.
+ * Staggered side thorns + partial pits — always leave a clear dodge lane.
+ */
+function injectObstacleCourse(L, hazards, finishZ, rng) {
+  const start = L <= 1 ? 36 : 28;
+  const end = finishZ - FINISH_PAD - BONUS_ZONE_LEN - 8;
+  if (end <= start + 10) return;
+
+  let z = start + rng() * 6;
+  let side = rng() < 0.5 ? 1 : -1;
+  let hid = 0;
+  const spacing = L <= 2 ? 22 : (L <= 5 ? 18 : 15);
+
+  while (z < end) {
+    // Side thorn — leave ~half the road open
+    const openLeft = side < 0;
+    hazards.push({
+      id: 'obs_t_' + (hid++),
+      type: 'thorn',
+      x0: openLeft ? 0.8 : -4.5,
+      x1: openLeft ? 4.5 : -0.8,
+      z: z,
+      depth: 1.0,
+      consumed: false,
+    });
+
+    // Occasional opposite-side pit (L2+) so you weave
+    if (L >= 2 && rng() < 0.55) {
+      const pitZ = z + 6 + rng() * 4;
+      if (pitZ < end) {
+        hazards.push({
+          id: 'obs_p_' + (hid++),
+          type: 'pit',
+          x0: openLeft ? -5 : 0.5,
+          x1: openLeft ? -0.5 : 5,
+          z0: pitZ,
+          z1: pitZ + 5 + rng() * 2,
+        });
+      }
+    }
+
+    // Occasional center squeeze thorn (L3+) — thin strip, dodgeable
+    if (L >= 3 && rng() < 0.35) {
+      hazards.push({
+        id: 'obs_c_' + (hid++),
+        type: 'thorn',
+        x0: -1.1,
+        x1: 1.1,
+        z: z + 11,
+        depth: 0.9,
+        consumed: false,
+      });
+    }
+
+    z += spacing + rng() * 8;
+    side *= -1;
   }
 }
 
@@ -625,20 +708,21 @@ function buildLevel(L, seed) {
     }
     stallGuard = 0;
     appendInst(inst, orbs, hazards, segmentsUsed);
-    // Wider gaps between segments — open road feel
-    z += t.length + lerp(5, 10, rng());
+    // Tighter segment packing — more stuff to steer through
+    z += t.length + lerp(2, 5, rng());
   }
 
-  sanitizeForLevel(L, orbs, hazards);
-
-  // Growth path:
-  // 1) progressive ladder spine (authoritative climb)
-  // 2) clamp teases
-  // 3) early 2s top-up
-  // 4) bonus wells at the end
+  // Growth path + spice:
+  // 1) progressive zigzag ladder
+  // 2) obstacle gauntlet (thorns / pits between beats)
+  // 3) clamp teases / early 2s
+  // 4) sanitize caps
+  // 5) bonus wells
   injectMergeLadder(L, orbs, finishZ, rng);
+  injectObstacleCourse(L, hazards, finishZ, rng);
   clampOrbValuesToCurve(L, orbs, finishZ);
   ensureEarlyMerges(L, orbs);
+  sanitizeForLevel(L, orbs, hazards);
   injectBonusFinale(L, hazards, finishZ);
 
   orbs.sort(function (a, b) { return a.z - b.z || a.x - b.x; });

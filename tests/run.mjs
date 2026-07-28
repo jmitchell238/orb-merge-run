@@ -265,17 +265,22 @@ const L1a = T.buildLevel(1, 10007);
 const L1b = T.buildLevel(1, 10007);
 assert(JSON.stringify(L1a) === JSON.stringify(L1b), 'determinism L1 seed');
 assertEq(L1a.finishZ, T.finishZForLevel(1), 'finishZ match');
-// L1: no thorns/pits (bonus wells OK)
-assert(
-  L1a.hazards.every(h => h.type === 'bonus' || (h.type !== 'thorn' && h.type !== 'pit')),
-  'L1 no thorn/pit (bonus ok)'
-);
+// L1: thorns ok (after intro), no pits; bonus wells OK
+assert(L1a.hazards.filter(h => h.type === 'pit').length === 0, 'L1 no pits');
+assert(L1a.hazards.some(h => h.type === 'thorn'), 'L1 has thorns (spice)');
 assert(L1a.orbs.some(o => o.value === 2 && o.z < 40), 'L1 early value-2');
 assert(L1a.orbs.length >= 3, 'L1 has orbs');
-// early merge guarantee: at least 2 center-ish twos before z=55
+// early merge guarantee: at least 2 twos before z=60 (can be wide lanes)
 {
-  const early = L1a.orbs.filter(o => o.value === 2 && o.z < 55 && Math.abs(o.x) < 1.5);
+  const early = L1a.orbs.filter(o => o.value === 2 && o.z < 60);
   assert(early.length >= 2, 'L1 ensureEarlyMerges (≥2 early twos)');
+}
+// orbs must zigzag — not all parked on center
+{
+  const avgAbsX = L1a.orbs.reduce((s, o) => s + Math.abs(o.x), 0) / L1a.orbs.length;
+  assert(avgAbsX >= 1.2, 'L1 orbs spread laterally (avg|x|=' + avgAbsX.toFixed(2) + ')');
+  const far = L1a.orbs.filter(o => Math.abs(o.x) >= 2.0).length;
+  assert(far >= 4, 'L1 has several wide-lane orbs (got ' + far + ')');
 }
 // bonus wells present
 {
@@ -283,23 +288,25 @@ assert(L1a.orbs.length >= 3, 'L1 has orbs');
   assert(bonuses.length >= 2, 'L1 has bonus wells (got ' + bonuses.length + ')');
   assert(bonuses.every(b => b.minValue >= 8 && b.coins > 0), 'bonus wells valid');
 }
-// sparse: not a wall of orbs
+// not a wall of orbs
 {
   assert(L1a.orbs.length <= 55, 'L1 sparse-ish orb count (got ' + L1a.orbs.length + ')');
 }
-// thorn cap
+// thorn cap (higher now — still capped)
 {
   const L9 = T.buildLevel(9, 9 * 10007);
   const thorns = L9.hazards.filter(h => h.type === 'thorn').length;
-  assert(thorns <= 4, 'L9 thorn cap ≤4 (got ' + thorns + ')');
+  assert(thorns <= 12, 'L9 thorn cap ≤12 (got ' + thorns + ')');
+  assert(thorns >= 4, 'L9 has real thorn count (got ' + thorns + ')');
 }
 
 const L2 = T.buildLevel(2, 20014);
-assert(L2.hazards.filter(h => h.type === 'pit').length === 0, 'L2 no pits');
-assert(L2.hazards.filter(h => h.type === 'thorn').every(h => h.z >= 50), 'L2 thorns z>=50');
+assert(L2.hazards.some(h => h.type === 'thorn'), 'L2 has thorns');
+// pits allowed later on L2
+assert(L2.hazards.filter(h => h.type === 'pit').every(h => h.z0 >= 55), 'L2 pits z0>=55');
 
 const L3 = T.buildLevel(3, 30021);
-assert(L3.hazards.filter(h => h.type === 'pit').length === 0, 'L3 no pits');
+assert(L3.hazards.some(h => h.type === 'pit' || h.type === 'thorn'), 'L3 has hazards');
 
 for (let L = 1; L <= 12; L++) {
   const lv = T.buildLevel(L, L * 10007);

@@ -135,7 +135,8 @@ function stepOrbMotion(orb, dt, trackHalf, pits) {
   orb.vz = vz * damp;
 
   const speed = Math.sqrt(orb.vx * orb.vx + orb.vz * orb.vz);
-  orb.rollAngle = (orb.rollAngle || 0) + speed * ORB_ROLL_SCALE * dt;
+  orb.rollAngle = (orb.rollAngle || 0) + speed * ORB_ROLL_SCALE * 2.2 * dt;
+  orb.rollYaw = (orb.rollYaw || 0) + (orb.vx || 0) * 1.6 * dt;
 
   // Fall off edge or into pit
   if (!hasSupport(orb.x, orb.z, trackHalf, pits)) {

@@ -28,6 +28,7 @@ function makePlayer() {
     squash: 1,
     expandT: 0,
     rollAngle: 0,
+    rollYaw: 0,
     mergeBoostT: 0,
     visible: true,
     falling: false,
@@ -198,6 +199,7 @@ function resolveFrame(dt) {
     player.targetX += pull;
   }
 
+  const prevX = player.x;
   player.x = lerp(player.x, player.targetX, Math.min(1, dt * STEER_LERP));
 
   const z0 = player.z;
@@ -271,8 +273,11 @@ function resolveFrame(dt) {
 
   // --- Commit z + roll ---
   player.z = z1;
-  // Arc length ≈ speed*dt; angle = s / r  (visible spin)
-  player.rollAngle += (spd * dt) / Math.max(0.25, player.radius);
+  // Fast visible spin: beach-ball panels need a clear turn rate
+  const rSafe = Math.max(0.25, player.radius);
+  player.rollAngle += (spd * dt) / rSafe * 2.4;
+  // Lateral steer adds yaw spin
+  player.rollYaw = (player.rollYaw || 0) + ((player.x - prevX) / rSafe) * 1.8;
 
   // Dynamic world orbs (knock / fall)
   updateDynamicOrbs(dt);

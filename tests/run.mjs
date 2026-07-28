@@ -301,13 +301,12 @@ assert(L1a.orbs.length >= 3, 'L1 has orbs');
   // no hole-style bonus hazards
   assert(L1a.hazards.every(h => h.type !== 'bonus'), 'no bonus pit hazards');
 }
-// Ball Run density: many orbs, full-width scatter (not a thin line of 20)
+// Moderate Ball Run density — NOT a carpet, NOT empty
 {
-  assert(L1a.orbs.length >= 45, 'L1 dense field (got ' + L1a.orbs.length + ')');
-  assert(L1a.orbs.length <= 140, 'L1 not absurdly dense (got ' + L1a.orbs.length + ')');
-  // several orbs visible per stretch of track
+  assert(L1a.orbs.length >= 30, 'L1 has a real field (got ' + L1a.orbs.length + ')');
+  assert(L1a.orbs.length <= 55, 'L1 not a carpet of balls (got ' + L1a.orbs.length + ')');
   const mid = L1a.orbs.filter(o => o.z > 40 && o.z < 100).length;
-  assert(mid >= 12, 'L1 mid-track has a pack of balls (got ' + mid + ')');
+  assert(mid >= 6 && mid <= 20, 'L1 mid-track moderate pack (got ' + mid + ')');
 }
 // thorn cap (higher now — still capped)
 {
@@ -361,8 +360,7 @@ assertEq(T.expectedValue(12, 1), 2048, 'L12 end ≈2048');
   assert(c4 >= 2, 'L5 has climb 4s (got ' + c4 + ')');
   assert(c8 >= 1, 'L5 has climb 8s (got ' + c8 + ')');
   assert(c16 >= 1, 'L5 has climb 16s (got ' + c16 + ')');
-  assert(L5.orbs.length >= 50, 'L5 dense field (got ' + L5.orbs.length + ')');
-  // early track shouldn't be nothing but 256s
+  assert(L5.orbs.length >= 30 && L5.orbs.length <= 80, 'L5 moderate field (got ' + L5.orbs.length + ')');
   const earlyHigh = L5.orbs.filter(o => o.z < L5.finishZ * 0.15 && o.value >= 128).length;
   assert(earlyHigh <= 3, 'L5 early track not stacked with 128+ (got ' + earlyHigh + ')');
 }
@@ -371,7 +369,7 @@ assertEq(T.expectedValue(12, 1), 2048, 'L12 end ≈2048');
   const L1 = T.buildLevel(1, 10007);
   for (const v of [2, 4, 8, 16, 32, 64, 128, 256, 512]) {
     const n = L1.orbs.filter(o => o.value === v).length;
-    assert(n >= 2, 'L1 ladder has ' + v + ' (got ' + n + ')');
+    assert(n >= 1, 'L1 ladder has ' + v + ' (got ' + n + ')');
   }
 }
 

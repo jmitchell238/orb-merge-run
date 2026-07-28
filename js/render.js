@@ -329,47 +329,84 @@ function drawFinish(finishZ, zn, zf) {
   }
 }
 
-// ---- Orb roll flipbook (pre-baked sprites, no live “line spin”) ---------------
-// Each value gets ROLL_FRAMES canvases: clean glossy ball + number stamped at
-// that roll phase. Runtime just swaps images — like an animation sheet.
+// ---- Orb roll flipbook (pre-baked sprites) -----------------------------------
+// Number is mapped onto the sphere in horizontal slices so it reads as wrapped
+// paint (not a flat sticker). Frames flip as the ball rolls under.
 
 const orbFrameCache = Object.create(null);
 
+/**
+ * Draw value as a decal wrapped on the sphere surface.
+ * `roll` radians: 0 = front center; increasing (with ROLL_DIR) rolls UNDER.
+ * Screen Y down: bottom of ball = positive screen Y.
+ */
 function paintStampedNumberOn(g, cx, cy, R, value, roll) {
-  // Number painted on the ball: rolls over the top and behind (Ball Run style).
-  // Local: +X right, +Y up, +Z toward camera. Rest stamp at front (0,0,1).
-  const cR = Math.cos(roll);
-  const sR = Math.sin(roll);
-  const lx = 0;
-  const ly = -sR;
-  const lz = cR;
-  if (lz <= 0.06) return;
-
-  const px = cx + lx * R * 0.9;
-  const py = cy - ly * R * 0.9;
-  const face = lz;
-  const scaleY = Math.max(0.14, face);
-  const scaleX = Math.max(0.2, 0.55 + face * 0.45);
-  const textRot = Math.atan2(0, cR); // tumble with forward roll
   const label = formatValueLabel(value);
-  const fontSize = Math.max(14, R * (label.length > 3 ? 0.72 : 0.95));
+  const fontSize = Math.max(18, R * (label.length > 3 ? 0.78 : 1.02));
+
+  // Rasterize flat label once
+  const pad = 4;
+  const tw = Math.ceil(fontSize * Math.max(1.2, label.length * 0.72) + pad * 2);
+  const th = Math.ceil(fontSize * 1.35 + pad * 2);
+  const tc = document.createElement('canvas');
+  tc.width = Math.max(8, tw);
+  tc.height = Math.max(8, th);
+  const tg = tc.getContext('2d');
+  tg.font = '900 ' + fontSize + 'px system-ui,Segoe UI,sans-serif';
+  tg.textAlign = 'center';
+  tg.textBaseline = 'middle';
+  tg.lineWidth = Math.max(2.5, fontSize * 0.2);
+  tg.strokeStyle = 'rgba(0,0,0,0.6)';
+  tg.strokeText(label, tc.width * 0.5, tc.height * 0.5);
+  tg.fillStyle = '#ffffff';
+  tg.fillText(label, tc.width * 0.5, tc.height * 0.5);
+
+  // Angular size of the decal on the sphere
+  const halfLat = 0.52; // vertical span (radians)
+  const slices = 28;
 
   g.save();
   g.beginPath();
-  g.arc(cx, cy, R * 0.98, 0, Math.PI * 2);
+  g.arc(cx, cy, R * 0.985, 0, Math.PI * 2);
   g.clip();
-  g.translate(px, py);
-  g.rotate(textRot);
-  g.scale(scaleX, scaleY);
-  g.globalAlpha = clamp(0.3 + face * 0.7, 0, 1);
-  g.font = '900 ' + fontSize + 'px system-ui,Segoe UI,sans-serif';
-  g.textAlign = 'center';
-  g.textBaseline = 'middle';
-  g.lineWidth = Math.max(2.5, fontSize * 0.18);
-  g.strokeStyle = 'rgba(0,0,0,0.55)';
-  g.strokeText(label, 0, 0);
-  g.fillStyle = '#ffffff';
-  g.fillText(label, 0, 0);
+
+  for (let i = 0; i < slices; i++) {
+    const v0 = i / slices;
+    const v1 = (i + 1) / slices;
+    // Texture v → latitude on sphere, then roll so paint moves under the ball
+    // lat=0 front equator; +lat = top of ball; -lat = bottom
+    const lat0 = -halfLat + v0 * (2 * halfLat) + roll;
+    const lat1 = -halfLat + v1 * (2 * halfLat) + roll;
+    const latM = (lat0 + lat1) * 0.5;
+
+    // Only front hemisphere (facing camera)
+    const face = Math.cos(latM);
+    if (face <= 0.05) continue;
+
+    // Sphere: y_up = sin(lat); screen y increases downward
+    const y0 = cy - Math.sin(lat0) * R;
+    const y1 = cy - Math.sin(lat1) * R;
+    const yTop = Math.min(y0, y1);
+    const h = Math.max(0.65, Math.abs(y1 - y0));
+
+    // Horizontal foreshortening + limb pinch (wrap cue)
+    const widthScale = Math.max(0.12, face);
+    // Extra squeeze near poles so it hugs the curve
+    const wrapPinch = 0.75 + 0.25 * face;
+    const decalW = R * 1.55 * widthScale * wrapPinch;
+
+    const srcY = v0 * tc.height;
+    const srcH = Math.max(1, (v1 - v0) * tc.height);
+
+    g.globalAlpha = clamp(0.25 + face * 0.75, 0, 1);
+    g.drawImage(
+      tc,
+      0, srcY, tc.width, srcH,
+      cx - decalW * 0.5, yTop,
+      decalW, h
+    );
+  }
+  g.globalAlpha = 1;
   g.restore();
 }
 
@@ -454,7 +491,8 @@ function orbCacheKey(value) {
 }
 
 function getOrbFrames(value) {
-  const key = orbCacheKey(value);
+  // Include bake version in key so wrap/dir fixes always rebuild
+  const key = orbCacheKey(value) + '_w2';
   if (orbFrameCache[key]) return orbFrameCache[key];
 
   const col = colorForValue(value);
@@ -464,8 +502,8 @@ function getOrbFrames(value) {
   const n = ROLL_FRAMES;
   const frames = new Array(n);
   for (let i = 0; i < n; i++) {
-    const roll = (i / n) * Math.PI * 2;
-    // Rainbow: gentle hue shift across frames so high tiers still pop
+    // Frame i: stamp latitude shifts under the ball (ROLL_DIR=-1)
+    const roll = (i / n) * Math.PI * 2 * (typeof ROLL_DIR === 'number' ? ROLL_DIR : -1);
     let f = fill;
     if (value >= 2048) {
       f = 'hsl(' + ((i * (360 / n)) % 360) + ', 90%, 58%)';
@@ -510,11 +548,12 @@ function drawOrbAt(x, y, z, value, radius, opts) {
 
   const frames = getOrbFrames(value);
   const n = frames.length;
-  // Normalize roll into [0, 2π) then pick frame
-  let roll = opts.rollAngle || 0;
-  roll = roll % (Math.PI * 2);
-  if (roll < 0) roll += Math.PI * 2;
-  const fi = Math.floor((roll / (Math.PI * 2)) * n) % n;
+  // rollAngle only increases with forward motion → walk flipbook 0..n-1
+  // (frames already baked so stamp rolls under, not over the top)
+  let phase = (opts.rollAngle || 0) / (Math.PI * 2);
+  phase = phase - Math.floor(phase);
+  if (phase < 0) phase += 1;
+  const fi = Math.floor(phase * n) % n;
   const sprite = frames[fi];
 
   // drawImage scales the baked ball to screen radius

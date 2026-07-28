@@ -405,24 +405,21 @@ function clampOrbValuesToCurve(L, orbs, finishZ) {
 }
 
 /**
- * Ball Run 2048–style field: DENSE clusters scattered full-width.
- * Looking down the road you should see many colored balls left/right,
- * mixed values, with spike strips between groups — not a thin ladder.
- *
- * Still guarantees a climb path (enough of each tier 2→…→end).
+ * Ball Run layout: modest packs full-width — NOT a carpet of 100 balls.
+ * Reference screenshot: ~15–25 visible ahead, scattered L/R with gaps.
+ * Target L1 ≈ 35–50 total orbs.
  */
 function injectMergeLadder(L, orbs, finishZ, rng) {
   const endTier = endTierForLevel(L);
   let injectId = 0;
 
   const climbEnd = finishZ - FINISH_PAD - 4;
-  const climbStart = 10;
-  // Full track width like the reference screenshot
-  const LANES = [-3.4, -2.5, -1.6, -0.7, 0.7, 1.6, 2.5, 3.4];
+  const climbStart = 12;
+  const LANES = [-3.2, -2.0, -0.8, 0.8, 2.0, 3.2];
 
   function tooClose(x, z, minZ, minX) {
-    minZ = minZ == null ? 1.35 : minZ;
-    minX = minX == null ? 0.85 : minX;
+    minZ = minZ == null ? 2.8 : minZ;
+    minX = minX == null ? 1.0 : minX;
     for (let i = 0; i < orbs.length; i++) {
       if (Math.abs(orbs[i].z - z) < minZ && Math.abs(orbs[i].x - x) < minX) return true;
     }
@@ -430,20 +427,16 @@ function injectMergeLadder(L, orbs, finishZ, rng) {
   }
 
   function place(x, z, value) {
-    x = clamp(x, -3.6, 3.6);
+    x = clamp(x, -3.5, 3.5);
     z = clamp(z, climbStart, climbEnd);
-    if (tooClose(x, z, 1.2, 0.8)) {
-      x = clamp(x + (rng() < 0.5 ? 0.9 : -0.9), -3.6, 3.6);
-      if (tooClose(x, z, 1.15, 0.75)) {
-        z = clamp(z + 1.1, climbStart, climbEnd);
-        if (tooClose(x, z, 1.1, 0.7)) return false;
-      }
+    if (tooClose(x, z, 2.6, 0.95)) {
+      x = clamp(x + (rng() < 0.5 ? 1.1 : -1.1), -3.5, 3.5);
+      if (tooClose(x, z, 2.4, 0.9)) return false;
     }
     orbs.push(makeOrb('o_field_' + (injectId++), x, z, value));
     return true;
   }
 
-  // Shuffle helper (deterministic via rng)
   function pickLanes(n) {
     const pool = LANES.slice();
     for (let i = pool.length - 1; i > 0; i--) {
@@ -453,48 +446,31 @@ function injectMergeLadder(L, orbs, finishZ, rng) {
     return pool.slice(0, Math.min(n, pool.length));
   }
 
-  // --- Dense cluster beats along the road (Ball Run look) ---
-  // ~ every 8–12 units: a pack of 3–6 balls across the width
+  // Packs every ~14–20 units: 2–3 balls (readable field, not a carpet)
   let z = climbStart;
-  let beat = 0;
-  while (z < climbEnd - 4) {
+  while (z < climbEnd - 6) {
     const u = clamp((z - climbStart) / Math.max(1, climbEnd - climbStart), 0, 1);
     const expTier = tierForValue(expectedValue(L, u));
-
-    // Cluster size: denser mid-field like the screenshot
-    const clusterN = 3 + Math.floor(rng() * 4); // 3–6
+    const clusterN = 2 + (rng() < 0.45 ? 1 : 0); // 2–3
     const lanes = pickLanes(clusterN);
 
     for (let i = 0; i < clusterN; i++) {
-      // Value mix: mostly on-curve, some −1 building blocks, some +1 teases
-      // (so the road shows many colors at once like Ball Run)
       let tier;
       const roll = rng();
-      if (i === 0) {
-        // Anchor match for the current expected size
-        tier = expTier;
-      } else if (roll < 0.28) {
-        tier = Math.max(0, expTier - 1);
-      } else if (roll < 0.48) {
-        tier = Math.min(endTier, expTier + 1); // forward tease
-      } else if (roll < 0.58 && expTier >= 2) {
-        tier = Math.max(0, expTier - 2);
-      } else {
-        tier = expTier;
-      }
-      // Slight z scatter inside the cluster (not a flat row)
-      const oz = z + (rng() - 0.5) * 3.2 + (i - clusterN * 0.5) * 0.55;
-      const ox = lanes[i] + (rng() - 0.5) * 0.35;
+      if (i === 0) tier = expTier;
+      else if (roll < 0.4) tier = Math.max(0, expTier - 1);
+      else if (roll < 0.65) tier = Math.min(endTier, expTier + 1);
+      else tier = expTier;
+
+      const oz = z + (rng() - 0.5) * 2.0;
+      const ox = lanes[i] + (rng() - 0.5) * 0.3;
       place(ox, oz, valueForTier(tier));
     }
 
-    // Advance to next pack — tight enough to see many balls ahead
-    z += 8 + rng() * 5;
-    beat++;
+    z += 14 + rng() * 6;
   }
 
-  // --- Guarantee climb ladder (enough of each tier to actually grow) ---
-  // Overlay dedicated matches so soft-lock is rare even if packs miss
+  // Climb guarantee — few copies, spread wide
   const span = climbEnd - climbStart;
   for (let tier = 0; tier <= endTier; tier++) {
     const value = valueForTier(tier);
@@ -502,45 +478,39 @@ function injectMergeLadder(L, orbs, finishZ, rng) {
     const u1 = (tier + 0.85) / (endTier + 1.1);
     const z0 = climbStart + u0 * span;
     const z1 = climbStart + u1 * span;
-    // More copies early (2→4→8), still several later
-    const copies = tier <= 1 ? 4 : (tier <= 4 ? 3 : 2);
+    const copies = tier <= 1 ? 2 : 1;
     for (let c = 0; c < copies; c++) {
-      const t = (c + 0.35) / copies;
+      const t = (c + 0.4) / Math.max(1, copies);
       const zz = lerp(z0, z1, t);
-      // Alternate far left / far right / mid so layout stays wide
-      const laneIdx = (tier * 3 + c * 2) % LANES.length;
-      place(LANES[laneIdx] + (rng() - 0.5) * 0.25, zz, value);
+      const laneIdx = (tier * 2 + c * 3) % LANES.length;
+      place(LANES[laneIdx], zz, value);
     }
   }
 }
 
 /**
- * Extra early 2s near the start so the first merges always exist.
+ * A few early 2s so the run always starts cleanly.
  */
 function ensureEarlyMerges(L, orbs) {
   function countEarlyTwos() {
     let n = 0;
     for (let i = 0; i < orbs.length; i++) {
-      if (orbs[i].value === 2 && orbs[i].z < 50) n++;
+      if (orbs[i].value === 2 && orbs[i].z < 45) n++;
     }
     return n;
   }
-  const need = 5;
+  const need = 3;
   const slots = [
-    { x: -2.8, z: 11 },
-    { x: 2.6, z: 14 },
-    { x: -1.4, z: 19 },
-    { x: 1.8, z: 23 },
-    { x: -3.0, z: 28 },
-    { x: 0.9, z: 32 },
-    { x: 3.1, z: 38 },
-    { x: -2.2, z: 44 },
+    { x: -2.4, z: 12 },
+    { x: 2.5, z: 20 },
+    { x: -1.6, z: 30 },
+    { x: 2.0, z: 40 },
   ];
   for (let s = 0; s < slots.length && countEarlyTwos() < need; s++) {
     const slot = slots[s];
     let blocked = false;
     for (let i = 0; i < orbs.length; i++) {
-      if (Math.abs(orbs[i].z - slot.z) < 1.6 && Math.abs(orbs[i].x - slot.x) < 0.95) {
+      if (Math.abs(orbs[i].z - slot.z) < 2.2 && Math.abs(orbs[i].x - slot.x) < 1.0) {
         blocked = true;
         break;
       }
@@ -551,18 +521,16 @@ function ensureEarlyMerges(L, orbs) {
 }
 
 /**
- * Spike strips like Ball Run — often BOTH sides with a center lane open,
- * placed between ball packs. Plus occasional pits on higher levels.
+ * Spike strips — dual sides with center open, between packs (not every meter).
  */
 function injectObstacleCourse(L, hazards, finishZ, rng) {
-  const start = 22;
+  const start = 28;
   const end = finishZ - FINISH_PAD - 8;
   if (end <= start + 10) return;
 
-  let z = start + rng() * 4;
+  let z = start + rng() * 6;
   let hid = 0;
-  // Dense enough to show up between orb clusters (screenshot cadence)
-  const spacing = L <= 2 ? 14 : (L <= 5 ? 12 : 10);
+  const spacing = L <= 2 ? 22 : (L <= 5 ? 18 : 15);
 
   while (z < end) {
     const pattern = rng();

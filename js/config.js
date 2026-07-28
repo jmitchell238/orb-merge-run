@@ -3,7 +3,7 @@
 
 // ---- Version (MAJOR.MINOR.PATCH) --------------------------------------------
 // Keep CACHE in sw.js in sync: 'orb-merge-run-' + GAME_VERSION
-const GAME_VERSION = '1.1.001';
+const GAME_VERSION = '1.2.000';
 const GAME_VERSION_LABEL = 'v' + GAME_VERSION;
 const GAME_NAME = 'Orb Merge Run';
 
@@ -33,9 +33,13 @@ const MERGE_BOOST_T = 0.35;
 const EDGE_ASSIST_FRAC = 0.88;
 const EDGE_ASSIST = 2.8;
 
-// Merge / ghost
-const GHOST_S = 0.15;
+// Merge / ghost / knock
+const GHOST_S = 0.35;
 const NUDGE_X = 0.55;
+const KNOCK_SPEED = 5.2;
+const KNOCK_Z = 1.4;
+const ORB_FRICTION = 2.8;
+const ORB_ROLL_SCALE = 1.15;
 const MAX_CHAIN = 4;
 
 // Thorns
@@ -44,10 +48,11 @@ const THORN_DEPTH = 1.0;
 // Cap thorns per level (balance pass)
 const MAX_THORNS_BY_LEVEL = [0, 0, 1, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5];
 
-// Level length
-const BASE_LEN = 160;
-const LEN_STEP = 22;
-const FINISH_PAD = 8;
+// Level length — longer road, sparser content (Ball Run feel)
+const BASE_LEN = 200;
+const LEN_STEP = 28;
+const FINISH_PAD = 10;
+const BONUS_ZONE_LEN = 18;
 const MAX_LEVEL = 12;
 
 // Camera (adapted from crowd-runner — not identical)
@@ -77,19 +82,20 @@ const TIERS = [
 ];
 
 function levelSpeed(L) {
-  // Slightly gentler ramp than v1 (cap 14.5 instead of 16)
-  return Math.min(7.8 + (L - 1) * 0.42, 14.5);
+  // Slightly gentler ramp — more time to aim merges
+  return Math.min(7.2 + (L - 1) * 0.38, 13.5);
 }
 
 function finishZForLevel(L) {
-  return BASE_LEN + (L - 1) * LEN_STEP + FINISH_PAD;
+  return BASE_LEN + (L - 1) * LEN_STEP + FINISH_PAD + BONUS_ZONE_LEN;
 }
 
-function coinsForFinish(level, value, mergeCount) {
+function coinsForFinish(level, value, mergeCount, bonusCoins) {
   const base = 20 + level * 8;
   const valueScore = Math.round(Math.log2(Math.max(2, value)) * 12);
   const mergeBonus = mergeCount * 2;
-  return Math.round((base + valueScore + mergeBonus) * COIN_MULT);
+  const well = bonusCoins || 0;
+  return Math.round((base + valueScore + mergeBonus + well) * COIN_MULT);
 }
 
 function DRAW_R_OF(v) {

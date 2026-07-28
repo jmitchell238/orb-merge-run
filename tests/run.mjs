@@ -66,13 +66,14 @@ function loadGame() {
       isPowerOfTwo, nextValue, demoteValue, tierForValue, valueForTier,
       colorForValue, radiusForValue,
       dist2PointSegment, sweptCircleHit, circleHit, isOffRail, hasSupport,
-      stripHit, sweptStripHit, softNudge,
+      stripHit, sweptStripHit, softNudge, stepOrbMotion, bonusWellAt,
       expectedValue, pickOrbValue, endTierForLevel, maxValueAt,
       TEMPLATES, TEMPLATES_BY_ID,
-      buildLevel, instantiateTemplate, trackHalfAt, pitsOf,
+      buildLevel, instantiateTemplate, trackHalfAt, pitsOf, bonusesOf,
       sanitizeForLevel, buildTrackKeyframes, overlapsTooClose,
-      injectMergeLadder, clampOrbValuesToCurve,
+      injectMergeLadder, clampOrbValuesToCurve, injectBonusFinale,
       SAVE_KEY, defaultSave, loadSave, save,
+      KNOCK_SPEED, GHOST_S, NUDGE_X, BASE_LEN, BONUS_ZONE_LEN,
     };
   `;
 
@@ -197,23 +198,40 @@ assert(T.hasSupport(0, 9.5, 5, [pit]) === true, 'before pit ok');
 assert(T.hasSupport(3, 12, 5, [pit]) === true, 'ledge beside pit ok');
 assert(T.hasSupport(6, 12, 5, [pit]) === false, 'off rail no support');
 
-// ---- Soft nudge -------------------------------------------------------------
-section('soft nudge');
+// ---- Soft nudge / knock -----------------------------------------------------
+section('soft nudge / knock');
 {
   const player = { x: 0, targetX: 1 };
-  const orb = { x: 0, ghostUntil: 0 };
+  const orb = { x: 0, ghostUntil: 0, vx: 0, vz: 0 };
   T.softNudge(player, orb, 1.0);
   assert(orb.x === 0.55, 'tie-break +1 when targetX>x');
-  assert(orb.ghostUntil === 1.0 + 0.15, 'ghost set');
+  assert(orb.vx > 0, 'knock gives +vx');
+  assert(orb.ghostUntil === 1.0 + T.GHOST_S, 'ghost set');
   const x2 = orb.x;
+  const vx2 = orb.vx;
   T.softNudge(player, orb, 1.05); // still ghost
   assert(orb.x === x2, 'no re-nudge while ghost');
+  assert(orb.vx === vx2, 'vx unchanged while ghost');
 }
 {
   const player = { x: 0, targetX: 0 };
-  const orb = { x: 2, ghostUntil: 0 };
+  const orb = { x: 2, ghostUntil: 0, vx: 0, vz: 0 };
   T.softNudge(player, orb, 0);
   assert(orb.x === 2.55, 'push away from player');
+  assert(orb.vx > 0, 'lateral knock velocity');
+}
+// orb rolls off edge after knock
+{
+  const orb = {
+    x: 5.2, z: 10, radius: 0.5, vx: 4, vz: 0,
+    consumed: false, falling: false, rollAngle: 0,
+  };
+  let fell = false;
+  for (let i = 0; i < 30; i++) {
+    const r = T.stepOrbMotion(orb, 0.05, 5, []);
+    if (r === 'fell' || orb.falling) { fell = true; break; }
+  }
+  assert(fell, 'knocked orb falls off rail');
 }
 
 // ---- Thorns -----------------------------------------------------------------
@@ -229,8 +247,13 @@ section('scoring');
 assertEq(T.COIN_MULT, 1, 'COIN_MULT=1');
 assert(T.coinsForFinish(1, 2, 0) > 0, 'coins positive');
 assert(T.coinsForFinish(1, 2048, 10) > T.coinsForFinish(1, 2, 0), 'bigger value more coins');
-assertEq(T.finishZForLevel(1), 160 + 8, 'finishZ L1');
-assertEq(T.finishZForLevel(5), 160 + 4 * 22 + 8, 'finishZ L5');
+assertEq(T.finishZForLevel(1), T.BASE_LEN + T.FINISH_PAD + T.BONUS_ZONE_LEN, 'finishZ L1');
+assertEq(
+  T.finishZForLevel(5),
+  T.BASE_LEN + 4 * T.LEN_STEP + T.FINISH_PAD + T.BONUS_ZONE_LEN,
+  'finishZ L5'
+);
+assert(T.coinsForFinish(1, 64, 5, 50) > T.coinsForFinish(1, 64, 5, 0), 'bonus coins increase payout');
 
 // ---- Level gen --------------------------------------------------------------
 section('level generation');
@@ -242,13 +265,27 @@ const L1a = T.buildLevel(1, 10007);
 const L1b = T.buildLevel(1, 10007);
 assert(JSON.stringify(L1a) === JSON.stringify(L1b), 'determinism L1 seed');
 assertEq(L1a.finishZ, T.finishZForLevel(1), 'finishZ match');
-assert(L1a.hazards.every(h => h.type !== 'thorn' && h.type !== 'pit'), 'L1 no hazards');
+// L1: no thorns/pits (bonus wells OK)
+assert(
+  L1a.hazards.every(h => h.type === 'bonus' || (h.type !== 'thorn' && h.type !== 'pit')),
+  'L1 no thorn/pit (bonus ok)'
+);
 assert(L1a.orbs.some(o => o.value === 2 && o.z < 40), 'L1 early value-2');
 assert(L1a.orbs.length >= 3, 'L1 has orbs');
 // early merge guarantee: at least 2 center-ish twos before z=55
 {
   const early = L1a.orbs.filter(o => o.value === 2 && o.z < 55 && Math.abs(o.x) < 1.5);
   assert(early.length >= 2, 'L1 ensureEarlyMerges (≥2 early twos)');
+}
+// bonus wells present
+{
+  const bonuses = T.bonusesOf(L1a);
+  assert(bonuses.length >= 2, 'L1 has bonus wells (got ' + bonuses.length + ')');
+  assert(bonuses.every(b => b.minValue >= 8 && b.coins > 0), 'bonus wells valid');
+}
+// sparse: not a wall of orbs
+{
+  assert(L1a.orbs.length <= 55, 'L1 sparse-ish orb count (got ' + L1a.orbs.length + ')');
 }
 // thorn cap
 {
@@ -258,16 +295,17 @@ assert(L1a.orbs.length >= 3, 'L1 has orbs');
 }
 
 const L2 = T.buildLevel(2, 20014);
-assert(L2.hazards.every(h => h.type !== 'pit'), 'L2 no pits');
-assert(L2.hazards.filter(h => h.type === 'thorn').every(h => h.z >= 40), 'L2 thorns z>=40');
+assert(L2.hazards.filter(h => h.type === 'pit').length === 0, 'L2 no pits');
+assert(L2.hazards.filter(h => h.type === 'thorn').every(h => h.z >= 50), 'L2 thorns z>=50');
 
 const L3 = T.buildLevel(3, 30021);
-assert(L3.hazards.every(h => h.type !== 'pit'), 'L3 no pits');
+assert(L3.hazards.filter(h => h.type === 'pit').length === 0, 'L3 no pits');
 
 for (let L = 1; L <= 12; L++) {
   const lv = T.buildLevel(L, L * 10007);
   assert(Number.isFinite(lv.finishZ), `L${L} finishZ finite`);
   assert(lv.orbs.length > 0, `L${L} has orbs`);
+  assert(T.bonusesOf(lv).length >= 1, `L${L} has bonus wells`);
   // pits ledge
   for (const h of lv.hazards) {
     if (h.type === 'pit') {
@@ -284,21 +322,42 @@ for (let L = 1; L <= 12; L++) {
   assert(Date.now() - t0 < 2000, 'buildLevel finishes quickly');
 }
 
-// expected value end tiers (gentler climb curve)
-assertEq(T.expectedValue(1, 1), 4, 'L1 end ≈4');
-assertEq(T.expectedValue(12, 1), 256, 'L12 end ≈256');
-// climb ladder: plenty of 2s and 4s on early/mid track
+// expected value end tiers — high enough for 512 on L1
+assertEq(T.expectedValue(1, 1), 512, 'L1 end ≈512');
+assertEq(T.expectedValue(12, 1), 2048, 'L12 end ≈2048');
+// progressive climb: few 2s then 4s then 8s (not a dense flood)
 {
   const L5 = T.buildLevel(5, 5 * 10007);
   const c2 = L5.orbs.filter(o => o.value === 2).length;
   const c4 = L5.orbs.filter(o => o.value === 4).length;
   const c8 = L5.orbs.filter(o => o.value === 8).length;
-  assert(c2 >= 6, 'L5 has many 2s for climb (got ' + c2 + ')');
-  assert(c4 >= 4, 'L5 has many 4s for climb (got ' + c4 + ')');
-  assert(c8 >= 2, 'L5 has some 8s for climb (got ' + c8 + ')');
-  // no extreme teases: early track (z< finish*0.25) should not be full of 64+
-  const earlyHigh = L5.orbs.filter(o => o.z < L5.finishZ * 0.25 && o.value >= 32).length;
-  assert(earlyHigh <= 1, 'L5 early track not stacked with 32+ (got ' + earlyHigh + ')');
+  const c16 = L5.orbs.filter(o => o.value === 16).length;
+  assert(c2 >= 3, 'L5 has climb 2s (got ' + c2 + ')');
+  assert(c4 >= 2, 'L5 has climb 4s (got ' + c4 + ')');
+  assert(c8 >= 1, 'L5 has climb 8s (got ' + c8 + ')');
+  assert(c16 >= 1, 'L5 has climb 16s (got ' + c16 + ')');
+  // sparse total
+  assert(L5.orbs.length <= 70, 'L5 not orb-dense (got ' + L5.orbs.length + ')');
+  // no extreme teases early
+  const earlyHigh = L5.orbs.filter(o => o.z < L5.finishZ * 0.2 && o.value >= 64).length;
+  assert(earlyHigh <= 1, 'L5 early track not stacked with 64+ (got ' + earlyHigh + ')');
+}
+// L1 full ladder through 256+ so 512 is reachable
+{
+  const L1 = T.buildLevel(1, 10007);
+  for (const v of [2, 4, 8, 16, 32, 64, 128, 256, 512]) {
+    const n = L1.orbs.filter(o => o.value === v).length;
+    assert(n >= 1, 'L1 ladder has ' + v + ' (got ' + n + ')');
+  }
+  assert(L1.orbs.length <= 45, 'L1 still sparse (got ' + L1.orbs.length + ')');
+}
+
+// bonus well support + claim rule helpers
+{
+  const well = { type: 'bonus', x0: -1, x1: 1, z0: 10, z1: 14, minValue: 32, coins: 40, claimed: false };
+  assert(T.hasSupport(0, 12, 5, [well]) === false, 'bonus well removes support');
+  assert(T.bonusWellAt(0, 12, [well]) === well, 'bonusWellAt finds well');
+  assert(T.bonusWellAt(3, 12, [well]) === null, 'bonusWellAt miss side');
 }
 
 // trackHalfAt half-open

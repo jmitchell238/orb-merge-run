@@ -204,6 +204,69 @@ function drawPits(levelData, zn, zf) {
   }
 }
 
+/** End-run bonus wells — glowing pits labeled with min value. */
+function drawBonusWells(levelData, zn, zf) {
+  if (!levelData) return;
+  for (let i = 0; i < levelData.hazards.length; i++) {
+    const p = levelData.hazards[i];
+    if (p.type !== 'bonus') continue;
+    if (p.z1 < zn || p.z0 > zf) continue;
+
+    const a = project(p.x0, -0.08, p.z0);
+    const b = project(p.x1, -0.08, p.z0);
+    const c = project(p.x1, -0.08, p.z1);
+    const d = project(p.x0, -0.08, p.z1);
+    if (!a || !b || !c || !d) continue;
+
+    // Deep gold void
+    const midX = (a[0] + b[0] + c[0] + d[0]) / 4;
+    const midY = (a[1] + b[1] + c[1] + d[1]) / 4;
+    const grd = ctx.createRadialGradient(midX, midY, 2, midX, midY, Math.abs(b[0] - a[0]) * 0.6 + 8);
+    if (p.claimed) {
+      grd.addColorStop(0, 'rgba(40,80,40,0.9)');
+      grd.addColorStop(1, 'rgba(10,20,10,0.95)');
+    } else {
+      grd.addColorStop(0, 'rgba(255,200,60,0.55)');
+      grd.addColorStop(0.45, 'rgba(80,40,10,0.85)');
+      grd.addColorStop(1, 'rgba(8,6,20,0.98)');
+    }
+    ctx.fillStyle = grd;
+    ctx.beginPath();
+    ctx.moveTo(a[0], a[1]);
+    ctx.lineTo(b[0], b[1]);
+    ctx.lineTo(c[0], c[1]);
+    ctx.lineTo(d[0], d[1]);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.strokeStyle = p.claimed ? 'rgba(100,200,100,0.4)' : 'rgba(255,220,80,0.75)';
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+
+    // Value label hovering over the well
+    const mid = project((p.x0 + p.x1) / 2, 0.55, (p.z0 + p.z1) / 2);
+    if (!mid) continue;
+    const s = mid[2];
+    const fontSize = Math.max(11, Math.min(28, 18 * s * 0.12));
+    ctx.font = '900 ' + fontSize + 'px system-ui,Segoe UI,sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const label = p.claimed ? '✓' : String(p.minValue);
+    ctx.lineWidth = Math.max(2, fontSize * 0.16);
+    ctx.strokeStyle = 'rgba(0,0,0,0.65)';
+    ctx.strokeText(label, mid[0], mid[1]);
+    ctx.fillStyle = p.claimed ? '#8bffb0' : '#ffe66d';
+    ctx.fillText(label, mid[0], mid[1]);
+
+    // small "BONUS" tag
+    if (!p.claimed) {
+      ctx.font = '700 ' + Math.max(8, fontSize * 0.45) + 'px system-ui,sans-serif';
+      ctx.fillStyle = 'rgba(255,255,255,0.85)';
+      ctx.fillText('BONUS', mid[0], mid[1] + fontSize * 0.7);
+    }
+  }
+}
+
 function drawThorns(levelData, zn, zf) {
   if (!levelData) return;
   for (let i = 0; i < levelData.hazards.length; i++) {
@@ -260,51 +323,102 @@ function drawFinish(finishZ, zn, zf) {
   }
 }
 
+/**
+ * Draw a glossy numbered orb with optional roll stripes.
+ * opts.rollAngle — radians of spin (body rolls; number stays upright for read).
+ * opts.y — world Y of sphere center (defaults to radius; falling uses lower).
+ */
 function drawOrbAt(x, y, z, value, radius, opts) {
   opts = opts || {};
-  const p = project(x, y, z);
+  const centerY = y != null ? y : radius;
+  const p = project(x, centerY, z);
   if (!p) return;
   const sx = p[0], sy = p[1], s = p[2];
   const r = radius * s;
   if (r < 1.5) return;
 
-  // ground shadow
+  // ground shadow (shrinks / fades when falling)
+  const falling = opts.falling || centerY < radius * 0.85;
   const sh = project(x, 0.02, z);
-  if (sh) {
-    ctx.fillStyle = 'rgba(0,0,0,0.28)';
+  if (sh && centerY > -1) {
+    const shadowScale = falling ? clamp(centerY / Math.max(0.2, radius), 0.15, 1) : 1;
+    ctx.fillStyle = 'rgba(0,0,0,' + (0.28 * shadowScale) + ')';
     ctx.beginPath();
-    ctx.ellipse(sh[0], sh[1], r * 0.95, r * 0.35, 0, 0, Math.PI * 2);
+    ctx.ellipse(sh[0], sh[1], r * 0.95 * shadowScale, r * 0.35 * shadowScale, 0, 0, Math.PI * 2);
     ctx.fill();
   }
 
   const col = colorForValue(value);
   let fill = col.color;
   if (fill === 'rainbow') {
-    fill = rainbowColor(value * 0.01 + z * 0.02);
+    fill = rainbowColor(value * 0.01 + z * 0.02 + (opts.rollAngle || 0) * 0.05);
   }
 
+  const roll = opts.rollAngle || 0;
+
   // body
+  const hlOffX = -r * 0.35 + Math.sin(roll) * r * 0.12;
+  const hlOffY = -r * 0.4 + Math.cos(roll) * r * 0.08;
   const grd = ctx.createRadialGradient(
-    sx - r * 0.35, sy - r * 0.4, r * 0.1,
+    sx + hlOffX, sy + hlOffY, r * 0.1,
     sx, sy, r
   );
   grd.addColorStop(0, '#ffffff');
-  grd.addColorStop(0.22, fill);
-  grd.addColorStop(0.75, fill);
-  grd.addColorStop(1, shadeColor(fill, -35));
+  grd.addColorStop(0.2, fill);
+  grd.addColorStop(0.72, fill);
+  grd.addColorStop(1, shadeColor(fill, -38));
   ctx.fillStyle = grd;
   ctx.beginPath();
   ctx.arc(sx, sy, r, 0, Math.PI * 2);
   ctx.fill();
 
+  // Rolling latitude stripes (clipped to the sphere) — this is the "it rolls" read
+  if (r >= 4) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(sx, sy, r * 0.98, 0, Math.PI * 2);
+    ctx.clip();
+
+    const stripeColor = 'rgba(0,0,0,0.18)';
+    const stripeHi = 'rgba(255,255,255,0.22)';
+    // 3 bands that travel with rollAngle (forward roll around X axis in screen space ≈ vertical motion)
+    for (let k = -2; k <= 2; k++) {
+      // band center offset in ball-local "latitude"
+      const phase = roll + k * 0.85;
+      const ny = Math.sin(phase); // -1..1 across the face
+      if (Math.abs(ny) > 0.92) continue;
+      const bandY = sy + ny * r * 0.92;
+      const halfW = Math.sqrt(Math.max(0, 1 - ny * ny)) * r * 0.95;
+      const bandH = Math.max(1.2, r * 0.1 * Math.cos(phase * 0.5 + 0.2));
+      ctx.fillStyle = (k + 2) % 2 === 0 ? stripeColor : stripeHi;
+      ctx.beginPath();
+      ctx.ellipse(sx, bandY, halfW, bandH, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // vertical meridian wobble for lateral knock roll
+    if (opts.sideRoll) {
+      const mx = Math.sin(roll * 0.7) * r * 0.55;
+      ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+      ctx.lineWidth = Math.max(1, r * 0.06);
+      ctx.beginPath();
+      ctx.ellipse(sx + mx * 0.15, sy, r * 0.18, r * 0.9, 0, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    ctx.restore();
+  }
+
   // rim glow
   ctx.strokeStyle = col.glow || fill;
   ctx.globalAlpha = 0.55;
   ctx.lineWidth = Math.max(1.5, r * 0.08);
+  ctx.beginPath();
+  ctx.arc(sx, sy, r, 0, Math.PI * 2);
   ctx.stroke();
   ctx.globalAlpha = 1;
 
-  // number
+  // number stays upright for readability
   const label = formatValueLabel(value);
   const fontSize = Math.max(10, r * (label.length > 3 ? 0.7 : 0.95));
   ctx.font = '900 ' + fontSize + 'px system-ui,Segoe UI,sans-serif';
@@ -460,6 +574,7 @@ function drawWorld(player, levelData, dt) {
   drawSky();
   drawTrackStrip(levelData, zn, zf);
   drawPits(levelData, zn, zf);
+  drawBonusWells(levelData, zn, zf);
   drawCurbs(levelData, zn, zf);
   drawFinish(levelData ? levelData.finishZ : null, zn, zf);
   drawThorns(levelData, zn, zf);
@@ -468,19 +583,30 @@ function drawWorld(player, levelData, dt) {
   if (levelData) {
     const list = levelData.orbs
       .filter(function (o) {
-        return !o.consumed && o.z > zn - 2 && o.z < zf;
+        return !o.consumed && o.visible !== false && o.z > zn - 2 && o.z < zf;
       })
       .sort(function (a, b) { return a.z - b.z; });
     for (let i = 0; i < list.length; i++) {
       const o = list[i];
-      drawOrbAt(o.x, o.radius, o.z, o.value, o.radius, { debugHit: DEBUG });
+      const oy = o.falling && o.y != null ? o.y : o.radius;
+      drawOrbAt(o.x, oy, o.z, o.value, o.radius, {
+        debugHit: DEBUG,
+        rollAngle: o.rollAngle || 0,
+        falling: !!o.falling,
+        sideRoll: Math.abs(o.vx || 0) > 0.3,
+      });
     }
   }
 
   if (player && player.visible !== false) {
-    const y = player.radius * (player.squash || 1);
-    drawOrbAt(player.x, player.radius, player.z, player.value, player.radius * (player.squash || 1), {
+    const drawR = player.radius * (player.squash || 1);
+    const py = player.falling && player.fallY != null
+      ? player.fallY
+      : player.radius;
+    drawOrbAt(player.x, py, player.z, player.value, drawR, {
       debugHit: DEBUG,
+      rollAngle: player.rollAngle || 0,
+      falling: !!player.falling,
     });
   }
 

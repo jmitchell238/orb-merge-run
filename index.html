@@ -43,8 +43,10 @@
         <ol class="tut-list">
           <li><b>Drag</b> left/right (or ← →) to steer</li>
           <li>Hit balls with the <b>same number</b> to merge &amp; grow</li>
-          <li>Avoid <b>thorns</b> (they shrink you) and <b>don’t fall off</b></li>
-          <li>Reach the checkered <b>goal</b> with the biggest number you can!</li>
+          <li>Wrong numbers <b>roll away</b> — knock them off the edge!</li>
+          <li>Avoid <b>thorns</b> and don’t fall into gaps</li>
+          <li>Near the end: drop into a gold <b>bonus hole</b> big enough for your size</li>
+          <li>Or roll to the checkered <b>goal</b> for a normal finish</li>
         </ol>
         <button id="btnTutorialOk" class="primary">Got it — let’s roll!</button>
       </div>
@@ -84,8 +86,9 @@
           <ol>
             <li><b>Drag</b> left or right to steer your ball (keyboard ← → / A D).</li>
             <li>Hit an orb with the <b>same number</b> — they merge into the next power of two (2→4→8…→2048).</li>
-            <li>Different numbers bounce past gently. <b>Thorns</b> cut your number in half.</li>
-            <li>Falling off the rail or into a pit ends the run. Reach the checkered goal for coins!</li>
+            <li>Different numbers <b>roll away</b> and can tumble off the track. <b>Thorns</b> cut your number in half.</li>
+            <li>Near the goal: gold <b>bonus holes</b> pay coins if you’re big enough — too small and you fall through.</li>
+            <li>Or stay on the solid path and finish at the checkered goal.</li>
           </ol>
         </div>
 
@@ -117,6 +120,7 @@
         <div class="stats tall">
           <div><span class="lbl">Finish value</span><strong id="winValue">2</strong></div>
           <div><span class="lbl">Coins</span><strong id="winCoins">+0</strong></div>
+          <div><span class="lbl">Bonus</span><strong id="winBonus">—</strong></div>
           <div><span class="lbl">Merges</span><strong id="winMerges">0</strong></div>
           <div><span class="lbl">Level</span><strong id="winLevel">1</strong></div>
         </div>

@@ -1,5 +1,5 @@
 // Bump with GAME_VERSION in js/config.js (MAJOR.MINOR.PATCH).
-const CACHE = 'orb-merge-run-1.1.001';
+const CACHE = 'orb-merge-run-1.2.000';
 
 const ASSETS = [
   './',

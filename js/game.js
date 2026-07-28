@@ -9,11 +9,13 @@ let mergeCount = 0;
 let runTime = 0;
 let deadTimer = 0;
 let lastCoinsEarned = 0;
+let lastBonusCoins = 0;
 let lastFinishValue = 2;
 let overReason = '';
 let showTutorial = false;
 let celebration2048 = false;
 let nowTime = 0;
+let bonusClaimedThisRun = 0;
 
 function makePlayer() {
   return {
@@ -28,6 +30,9 @@ function makePlayer() {
     rollAngle: 0,
     mergeBoostT: 0,
     visible: true,
+    falling: false,
+    fallY: 0,
+    vy: 0,
   };
 }
 
@@ -40,9 +45,11 @@ function startLevel(L, seedOverride) {
   runTime = 0;
   deadTimer = 0;
   lastCoinsEarned = 0;
+  lastBonusCoins = 0;
   lastFinishValue = 2;
   overReason = '';
   celebration2048 = false;
+  bonusClaimedThisRun = 0;
   clearParticles();
   cam.x = 0;
   cam.z = -CAM_Z_BACK;
@@ -76,16 +83,26 @@ function beginDead(reason) {
   state = 'dead';
   deadTimer = DEAD_ANIM_S;
   overReason = reason || 'You fell off the track!';
+  if (player) {
+    player.falling = true;
+    player.vy = 0.8;
+    player.fallY = player.radius;
+  }
   sfxDeath();
   addShake(6, 0.35);
   recordDeath();
 }
 
-function deathReasonAt(x, z, trackHalf, pits) {
+function deathReasonAt(x, z, trackHalf, pits, bonuses) {
   if (isOffRail(x, trackHalf)) return 'You rolled off the edge!';
+  const well = bonusWellAt(x, z, bonuses);
+  if (well) {
+    return 'Too small for the ' + well.minValue + ' bonus hole!';
+  }
   if (pits && pits.length) {
     for (let i = 0; i < pits.length; i++) {
       const p = pits[i];
+      if (p.type === 'bonus') continue;
       if (z >= p.z0 && z <= p.z1 && x >= p.x0 && x <= p.x1) {
         return 'You fell into a gap!';
       }
@@ -94,13 +111,24 @@ function deathReasonAt(x, z, trackHalf, pits) {
   return 'You fell off the track!';
 }
 
-function completeLevel() {
+function completeLevel(opts) {
+  opts = opts || {};
   if (state !== 'play') return;
   lastFinishValue = player.value;
-  lastCoinsEarned = coinsForFinish(currentLevel, player.value, mergeCount);
+  lastBonusCoins = bonusClaimedThisRun;
+  lastCoinsEarned = coinsForFinish(
+    currentLevel,
+    player.value,
+    mergeCount,
+    bonusClaimedThisRun
+  );
   recordWin(currentLevel, player.value, lastCoinsEarned);
   state = 'win';
-  sfxWin();
+  if (opts.fromBonus) {
+    sfxBonus(player.value);
+  } else {
+    sfxWin();
+  }
   if (player.value >= 2048) {
     celebration2048 = true;
     sfxRainbow();
@@ -116,7 +144,7 @@ function collectSameValueHits(pHitR, value, z0, z1) {
   const orbs = levelData.orbs;
   for (let i = 0; i < orbs.length; i++) {
     const orb = orbs[i];
-    if (orb.consumed || orb.ghostUntil > nowTime) continue;
+    if (orb.consumed || orb.falling || orb.ghostUntil > nowTime) continue;
     if (orb.value !== value) continue;
     if (orb.z < z0 - 4 || orb.z > z1 + 4) continue;
     const h = sweptCircleHit(
@@ -130,6 +158,26 @@ function collectSameValueHits(pHitR, value, z0, z1) {
     return Math.abs(a.orb.x - player.x) - Math.abs(b.orb.x - player.x);
   });
   return hits;
+}
+
+function updateDynamicOrbs(dt) {
+  if (!levelData || !player) return;
+  const trackHalf = trackHalfAt(player.z, levelData.trackKeys);
+  const pits = pitsOf(levelData);
+  for (let i = 0; i < levelData.orbs.length; i++) {
+    const orb = levelData.orbs[i];
+    if (orb.consumed) continue;
+    // Only integrate orbs near the camera/player for perf
+    if (orb.z < player.z - 8 || orb.z > player.z + 50) {
+      if (!orb.falling && Math.abs(orb.vx || 0) < 0.05) continue;
+    }
+    const res = stepOrbMotion(orb, dt, trackHalfAt(orb.z, levelData.trackKeys), pits);
+    if (res === 'fell' && orb.falling && !orb._fallSfx) {
+      orb._fallSfx = true;
+      sfxFall();
+      spawnBurst(orb.x, 0.2, orb.z, colorForValue(orb.value).glow || '#fff', 6);
+    }
+  }
 }
 
 function resolveFrame(dt) {
@@ -157,6 +205,7 @@ function resolveFrame(dt) {
   const z1 = z0 + spd * dt;
   const trackHalf = trackHalfAt(z1, levelData.trackKeys);
   const pits = pitsOf(levelData);
+  const bonuses = bonusesOf(levelData);
 
   // --- Merges + chains (full re-scan) ---
   let merges = 0;
@@ -188,10 +237,10 @@ function resolveFrame(dt) {
     }
   }
 
-  // --- Wrong-value nudges ---
+  // --- Wrong-value knocks (roll away / can fall off) ---
   for (let i = 0; i < levelData.orbs.length; i++) {
     const orb = levelData.orbs[i];
-    if (orb.consumed || orb.ghostUntil > nowTime) continue;
+    if (orb.consumed || orb.falling || orb.ghostUntil > nowTime) continue;
     if (orb.value === player.value) continue;
     if (orb.z < z0 - 4 || orb.z > z1 + 4) continue;
     const hit = sweptCircleHit(
@@ -220,12 +269,31 @@ function resolveFrame(dt) {
     }
   }
 
-  // --- Commit z, then death before finish ---
+  // --- Commit z + roll ---
   player.z = z1;
-  player.rollAngle += spd * dt * 2.5;
+  // Arc length ≈ speed*dt; angle = s / r  (visible spin)
+  player.rollAngle += (spd * dt) / Math.max(0.25, player.radius);
 
+  // Dynamic world orbs (knock / fall)
+  updateDynamicOrbs(dt);
+
+  // --- Support / bonus wells / death ---
   if (!hasSupport(player.x, player.z, trackHalf, pits)) {
-    beginDead(deathReasonAt(player.x, player.z, trackHalf, pits));
+    const well = bonusWellAt(player.x, player.z, bonuses);
+    if (well && player.value >= well.minValue) {
+      // Claim bonus hole — big enough to fill it
+      well.claimed = true;
+      bonusClaimedThisRun += well.coins;
+      spawnFloatText(player.x, player.radius + 0.5, player.z, '+' + well.coins + ' bonus!', '#ffe66d');
+      spawnBurst(player.x, player.radius, player.z, '#ffe66d', 18);
+      sfxBonus(well.minValue);
+      addShake(4, 0.2);
+      // Snap past wells and finish with bonus
+      player.z = Math.max(player.z, levelData.finishZ);
+      completeLevel({ fromBonus: true });
+      return;
+    }
+    beginDead(deathReasonAt(player.x, player.z, trackHalf, pits, bonuses));
     return;
   }
 
@@ -250,9 +318,14 @@ function updatePlay(dt) {
   } else if (state === 'dead') {
     deadTimer -= dt;
     if (player) {
-      player.x += (Math.random() - 0.5) * 0.05;
-      // sink visually by moving cam a bit / hide after anim
-      if (deadTimer < DEAD_ANIM_S * 0.3) player.visible = false;
+      // tumble + sink
+      player.x += (player.x > 0 ? 1 : -1) * 1.2 * dt;
+      player.rollAngle += 8 * dt;
+      if (player.falling) {
+        player.vy -= 14 * dt;
+        player.fallY = (player.fallY || player.radius) + player.vy * dt;
+      }
+      if (deadTimer < DEAD_ANIM_S * 0.25) player.visible = false;
     }
     if (deadTimer <= 0) {
       state = 'over';
@@ -266,7 +339,7 @@ function updatePlay(dt) {
 
 function previewCoins() {
   if (!player) return 0;
-  return coinsForFinish(currentLevel, player.value, mergeCount);
+  return coinsForFinish(currentLevel, player.value, mergeCount, bonusClaimedThisRun);
 }
 
 function progress01() {

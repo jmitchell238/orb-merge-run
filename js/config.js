@@ -3,7 +3,7 @@
 
 // ---- Version (MAJOR.MINOR.PATCH) --------------------------------------------
 // Keep CACHE in sw.js in sync: 'orb-merge-run-' + GAME_VERSION
-const GAME_VERSION = '1.2.003';
+const GAME_VERSION = '1.2.004';
 const GAME_VERSION_LABEL = 'v' + GAME_VERSION;
 const GAME_NAME = 'Orb Merge Run';
 
@@ -39,7 +39,13 @@ const NUDGE_X = 0.55;
 const KNOCK_SPEED = 5.2;
 const KNOCK_Z = 1.4;
 const ORB_FRICTION = 2.8;
-const ORB_ROLL_SCALE = 1.15;
+// Knocked orbs — gentle spin (was way too fast)
+const ORB_ROLL_SCALE = 0.35;
+// Player forward roll: fraction of physical ω = v/r (1 = real ball, lower = slower readable roll)
+const ROLL_RATE = 0.42;
+// Flipbook frames baked per orb value (sprite swap, not live line spin)
+const ROLL_FRAMES = 16;
+const ROLL_SPRITE_RES = 128;
 const MAX_CHAIN = 4;
 
 // Thorns

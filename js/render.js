@@ -329,71 +329,164 @@ function drawFinish(finishZ, zn, zf) {
   }
 }
 
-/**
- * Number stamped on the sphere surface (Ball Run style).
- * Rolls with the ball: climbs over the top, disappears behind, comes around again.
- * Local coords: +X right, +Y up, +Z toward camera. Rest pose = front (0,0,1).
- */
-function drawStampedNumber(sx, sy, r, value, roll, yaw) {
-  const label = formatValueLabel(value);
+// ---- Orb roll flipbook (pre-baked sprites, no live “line spin”) ---------------
+// Each value gets ROLL_FRAMES canvases: clean glossy ball + number stamped at
+// that roll phase. Runtime just swaps images — like an animation sheet.
 
-  // Rest stamp on front; roll around X (forward), then yaw around Y (steer/knock)
+const orbFrameCache = Object.create(null);
+
+function paintStampedNumberOn(g, cx, cy, R, value, roll) {
+  // Number painted on the ball: rolls over the top and behind (Ball Run style).
+  // Local: +X right, +Y up, +Z toward camera. Rest stamp at front (0,0,1).
   const cR = Math.cos(roll);
   const sR = Math.sin(roll);
-  const cY = Math.cos(yaw);
-  const sY = Math.sin(yaw);
-
-  // (0,0,1) → roll X → (0, -sR, cR) → yaw Y → …
-  const lx = cR * sY;
+  const lx = 0;
   const ly = -sR;
-  const lz = cR * cY; // >0 = front hemisphere (visible)
+  const lz = cR;
+  if (lz <= 0.06) return;
 
-  // Behind the ball — fully hidden (stamped paint, not a HUD billboard)
-  if (lz <= 0.04) return;
-
-  const px = sx + lx * r * 0.93;
-  const py = sy - ly * r * 0.93; // screen Y is down
-
-  // Flat sticker foreshortening on a sphere
+  const px = cx + lx * R * 0.9;
+  const py = cy - ly * R * 0.9;
   const face = lz;
-  const scaleX = Math.max(0.14, Math.abs(cY) * 0.25 + face * 0.75);
-  const scaleY = Math.max(0.12, face);
+  const scaleY = Math.max(0.14, face);
+  const scaleX = Math.max(0.2, 0.55 + face * 0.45);
+  const textRot = Math.atan2(0, cR); // tumble with forward roll
+  const label = formatValueLabel(value);
+  const fontSize = Math.max(14, R * (label.length > 3 ? 0.72 : 0.95));
 
-  // Local "up" of the stamp after the same rotations → screen rotation
-  // Rest up (0,1,0) → roll X: (0, cR, sR) → yaw Y: (sR*sY, cR, sR*cY)
-  const upX = sR * sY;
-  const upY = cR;
-  // screen up is -Y; angle of painted up in screen space
-  const textRot = Math.atan2(upX, upY);
-
-  const fontSize = Math.max(10, r * (label.length > 3 ? 0.72 : 0.98));
-
-  ctx.save();
-  // Clip to ball so the number wraps off the limb cleanly
-  ctx.beginPath();
-  ctx.arc(sx, sy, r * 0.99, 0, Math.PI * 2);
-  ctx.clip();
-
-  ctx.translate(px, py);
-  ctx.rotate(textRot);
-  ctx.scale(scaleX, scaleY);
-
-  // Fade near the silhouette so it “slides over” instead of popping
-  ctx.globalAlpha = clamp(0.25 + face * 0.75, 0, 1);
-  ctx.font = '900 ' + fontSize + 'px system-ui,Segoe UI,sans-serif';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.lineWidth = Math.max(2, fontSize * 0.2);
-  ctx.strokeStyle = 'rgba(0,0,0,0.6)';
-  ctx.strokeText(label, 0, 0);
-  ctx.fillStyle = '#fff';
-  ctx.fillText(label, 0, 0);
-  ctx.restore();
+  g.save();
+  g.beginPath();
+  g.arc(cx, cy, R * 0.98, 0, Math.PI * 2);
+  g.clip();
+  g.translate(px, py);
+  g.rotate(textRot);
+  g.scale(scaleX, scaleY);
+  g.globalAlpha = clamp(0.3 + face * 0.7, 0, 1);
+  g.font = '900 ' + fontSize + 'px system-ui,Segoe UI,sans-serif';
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.lineWidth = Math.max(2.5, fontSize * 0.18);
+  g.strokeStyle = 'rgba(0,0,0,0.55)';
+  g.strokeText(label, 0, 0);
+  g.fillStyle = '#ffffff';
+  g.fillText(label, 0, 0);
+  g.restore();
 }
 
 /**
- * Draw a glossy numbered orb that spins like Ball Run 2048.
- * Beach-ball gores + number stamped on the surface (rolls over & behind).
+ * Bake one flipbook frame: solid glossy ball + stamped number at `roll`.
+ * No seams, gores, or scanlines — a single painted sphere image.
+ */
+function bakeOrbFrame(value, fill, glow, roll) {
+  const res = ROLL_SPRITE_RES;
+  const c = document.createElement('canvas');
+  c.width = res;
+  c.height = res;
+  const g = c.getContext('2d');
+  const cx = res * 0.5;
+  const cy = res * 0.5;
+  const R = res * 0.46;
+
+  // Soft ground contact (inside sprite, slight)
+  g.fillStyle = 'rgba(0,0,0,0.12)';
+  g.beginPath();
+  g.ellipse(cx, cy + R * 0.72, R * 0.75, R * 0.22, 0, 0, Math.PI * 2);
+  g.fill();
+
+  // Body
+  const body = g.createRadialGradient(
+    cx - R * 0.32, cy - R * 0.38, R * 0.06,
+    cx, cy, R
+  );
+  body.addColorStop(0, '#ffffff');
+  body.addColorStop(0.18, fill);
+  body.addColorStop(0.72, fill);
+  body.addColorStop(1, shadeColor(fill, -40));
+  g.fillStyle = body;
+  g.beginPath();
+  g.arc(cx, cy, R, 0, Math.PI * 2);
+  g.fill();
+
+  // Soft “form” shadow (fixed lighting — not animated lines)
+  const form = g.createRadialGradient(
+    cx + R * 0.15, cy + R * 0.2, R * 0.1,
+    cx, cy, R
+  );
+  form.addColorStop(0, 'rgba(0,0,0,0)');
+  form.addColorStop(0.55, 'rgba(0,0,0,0)');
+  form.addColorStop(1, 'rgba(0,0,0,0.28)');
+  g.fillStyle = form;
+  g.beginPath();
+  g.arc(cx, cy, R, 0, Math.PI * 2);
+  g.fill();
+
+  // Number under specular so it reads as surface paint
+  paintStampedNumberOn(g, cx, cy, R, value, roll);
+
+  // Specular hot-spot (fixed camera light)
+  const spec = g.createRadialGradient(
+    cx - R * 0.28, cy - R * 0.32, 0,
+    cx - R * 0.28, cy - R * 0.32, R * 0.32
+  );
+  spec.addColorStop(0, 'rgba(255,255,255,0.85)');
+  spec.addColorStop(0.4, 'rgba(255,255,255,0.2)');
+  spec.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = spec;
+  g.beginPath();
+  g.arc(cx, cy, R, 0, Math.PI * 2);
+  g.fill();
+
+  // Rim
+  g.strokeStyle = glow || fill;
+  g.globalAlpha = 0.5;
+  g.lineWidth = Math.max(2, R * 0.06);
+  g.beginPath();
+  g.arc(cx, cy, R, 0, Math.PI * 2);
+  g.stroke();
+  g.globalAlpha = 1;
+
+  return c;
+}
+
+function orbCacheKey(value) {
+  if (value >= 2048) return '2048+';
+  return String(value);
+}
+
+function getOrbFrames(value) {
+  const key = orbCacheKey(value);
+  if (orbFrameCache[key]) return orbFrameCache[key];
+
+  const col = colorForValue(value);
+  let fill = col.color;
+  if (fill === 'rainbow') fill = '#ff6ad5';
+  const glow = col.glow || fill;
+  const n = ROLL_FRAMES;
+  const frames = new Array(n);
+  for (let i = 0; i < n; i++) {
+    const roll = (i / n) * Math.PI * 2;
+    // Rainbow: gentle hue shift across frames so high tiers still pop
+    let f = fill;
+    if (value >= 2048) {
+      f = 'hsl(' + ((i * (360 / n)) % 360) + ', 90%, 58%)';
+    }
+    frames[i] = bakeOrbFrame(value, f, glow, roll);
+  }
+  orbFrameCache[key] = frames;
+  return frames;
+}
+
+/** Warm the flipbook cache for common tiers (call once after DOM ready). */
+function prebakeOrbSprites() {
+  for (let t = 0; t <= 10; t++) {
+    getOrbFrames(valueForTier(t));
+  }
+  getOrbFrames(4096);
+}
+
+/**
+ * Draw orb by blitting the flipbook frame for this roll angle.
+ * Looks like swapping animation frames — not procedural spinning lines.
  */
 function drawOrbAt(x, y, z, value, radius, opts) {
   opts = opts || {};
@@ -404,7 +497,7 @@ function drawOrbAt(x, y, z, value, radius, opts) {
   const r = radius * s;
   if (r < 1.5) return;
 
-  // ground shadow (shrinks / fades when falling)
+  // ground shadow in world
   const falling = opts.falling || centerY < radius * 0.85;
   const sh = project(x, 0.02, z);
   if (sh && centerY > -1) {
@@ -415,115 +508,18 @@ function drawOrbAt(x, y, z, value, radius, opts) {
     ctx.fill();
   }
 
-  const col = colorForValue(value);
-  let fill = col.color;
-  if (fill === 'rainbow') {
-    fill = rainbowColor(value * 0.01 + z * 0.02 + (opts.rollAngle || 0) * 0.05);
-  }
+  const frames = getOrbFrames(value);
+  const n = frames.length;
+  // Normalize roll into [0, 2π) then pick frame
+  let roll = opts.rollAngle || 0;
+  roll = roll % (Math.PI * 2);
+  if (roll < 0) roll += Math.PI * 2;
+  const fi = Math.floor((roll / (Math.PI * 2)) * n) % n;
+  const sprite = frames[fi];
 
-  const roll = opts.rollAngle || 0;
-  const yaw = opts.rollYaw || 0;
-  const dark = shadeColor(fill, -42);
-  const light = shadeColor(fill, 28);
-
-  // Flat base disc
-  ctx.fillStyle = fill;
-  ctx.beginPath();
-  ctx.arc(sx, sy, r, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Spinning beach-ball gores
-  if (r >= 5) {
-    ctx.save();
-    ctx.beginPath();
-    ctx.arc(sx, sy, r * 0.99, 0, Math.PI * 2);
-    ctx.clip();
-
-    const panels = 6;
-    const spin = roll + yaw * 0.65;
-    for (let i = 0; i < panels; i++) {
-      const a0 = spin + (i / panels) * Math.PI * 2;
-      const a1 = spin + ((i + 1) / panels) * Math.PI * 2;
-      ctx.beginPath();
-      ctx.moveTo(sx, sy);
-      ctx.arc(sx, sy, r, a0, a1);
-      ctx.closePath();
-      if (i % 2 === 0) {
-        ctx.fillStyle = dark;
-        ctx.globalAlpha = 0.38;
-      } else {
-        ctx.fillStyle = light;
-        ctx.globalAlpha = 0.22;
-      }
-      ctx.fill();
-    }
-    ctx.globalAlpha = 1;
-
-    ctx.strokeStyle = 'rgba(0,0,0,0.18)';
-    ctx.lineWidth = Math.max(1, r * 0.035);
-    for (let i = 0; i < panels; i++) {
-      const a = spin + (i / panels) * Math.PI * 2;
-      ctx.beginPath();
-      ctx.moveTo(sx, sy);
-      ctx.lineTo(sx + Math.cos(a) * r, sy + Math.sin(a) * r);
-      ctx.stroke();
-    }
-
-    const tilt = spin * 0.5;
-    ctx.strokeStyle = 'rgba(255,255,255,0.28)';
-    ctx.lineWidth = Math.max(1.5, r * 0.09);
-    ctx.beginPath();
-    ctx.ellipse(
-      sx + Math.sin(tilt) * r * 0.08,
-      sy + Math.cos(tilt) * r * 0.06,
-      r * 0.78,
-      r * 0.32,
-      tilt * 0.35,
-      0,
-      Math.PI * 2
-    );
-    ctx.stroke();
-
-    ctx.restore();
-  }
-
-  // Number UNDER the lighting so it looks painted into the surface
-  drawStampedNumber(sx, sy, r, value, roll, yaw);
-
-  // Spherical shading overlay (fixed light, keeps it looking round)
-  const shade = ctx.createRadialGradient(
-    sx - r * 0.32, sy - r * 0.38, r * 0.05,
-    sx, sy, r
-  );
-  shade.addColorStop(0, 'rgba(255,255,255,0.45)');
-  shade.addColorStop(0.28, 'rgba(255,255,255,0.1)');
-  shade.addColorStop(0.7, 'rgba(0,0,0,0)');
-  shade.addColorStop(1, 'rgba(0,0,0,0.35)');
-  ctx.fillStyle = shade;
-  ctx.beginPath();
-  ctx.arc(sx, sy, r, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Specular hot-spot
-  const hx = sx - r * 0.28 + Math.cos(roll * 0.7) * r * 0.06;
-  const hy = sy - r * 0.32 + Math.sin(roll * 0.7) * r * 0.05;
-  const spec = ctx.createRadialGradient(hx, hy, 0, hx, hy, r * 0.28);
-  spec.addColorStop(0, 'rgba(255,255,255,0.75)');
-  spec.addColorStop(0.45, 'rgba(255,255,255,0.15)');
-  spec.addColorStop(1, 'rgba(255,255,255,0)');
-  ctx.fillStyle = spec;
-  ctx.beginPath();
-  ctx.arc(sx, sy, r, 0, Math.PI * 2);
-  ctx.fill();
-
-  // rim glow
-  ctx.strokeStyle = col.glow || fill;
-  ctx.globalAlpha = 0.55;
-  ctx.lineWidth = Math.max(1.5, r * 0.08);
-  ctx.beginPath();
-  ctx.arc(sx, sy, r, 0, Math.PI * 2);
-  ctx.stroke();
-  ctx.globalAlpha = 1;
+  // drawImage scales the baked ball to screen radius
+  const size = r * 2.12; // slight oversize so rim isn’t clipped by canvas edge padding
+  ctx.drawImage(sprite, sx - size * 0.5, sy - size * 0.5, size, size);
 
   if (opts.debugHit) {
     ctx.strokeStyle = 'rgba(255,80,80,0.6)';

@@ -273,11 +273,11 @@ function resolveFrame(dt) {
 
   // --- Commit z + roll ---
   player.z = z1;
-  // Fast visible spin: beach-ball panels need a clear turn rate
+  // Slow, readable roll — drives flipbook frame index (not live gore spin)
   const rSafe = Math.max(0.25, player.radius);
-  player.rollAngle += (spd * dt) / rSafe * 2.4;
-  // Lateral steer adds yaw spin
-  player.rollYaw = (player.rollYaw || 0) + ((player.x - prevX) / rSafe) * 1.8;
+  player.rollAngle += (spd * dt) / rSafe * ROLL_RATE;
+  // Gentle yaw from steer (knocked orbs use collision roll more)
+  player.rollYaw = (player.rollYaw || 0) + ((player.x - prevX) / rSafe) * 0.35;
 
   // Dynamic world orbs (knock / fall)
   updateDynamicOrbs(dt);
@@ -339,7 +339,7 @@ function updatePlay(dt) {
     if (player) {
       // tumble + sink
       player.x += (player.x > 0 ? 1 : -1) * 1.2 * dt;
-      player.rollAngle += 8 * dt;
+      player.rollAngle += 1.6 * dt;
       if (player.falling) {
         player.vy -= 14 * dt;
         player.fallY = (player.fallY || player.radius) + player.vy * dt;

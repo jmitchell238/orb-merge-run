@@ -98,7 +98,7 @@ function stepOrbMotion(orb, dt, trackHalf, pits) {
     orb.y = (orb.y != null ? orb.y : orb.radius) + orb.vy * dt;
     orb.x += (orb.vx || 0) * dt;
     orb.z += (orb.vz || 0) * dt;
-    orb.rollAngle = (orb.rollAngle || 0) + Math.abs(orb.vx || 0) * ORB_ROLL_SCALE * dt;
+    orb.rollAngle = (orb.rollAngle || 0) + Math.abs(orb.vx || 0) * ORB_ROLL_SCALE * 0.5 * dt;
     if (orb.y < -6) {
       orb.consumed = true;
       orb.visible = false;
@@ -123,8 +123,8 @@ function stepOrbMotion(orb, dt, trackHalf, pits) {
   orb.vz = vz * damp;
 
   const speed = Math.sqrt(orb.vx * orb.vx + orb.vz * orb.vz);
-  orb.rollAngle = (orb.rollAngle || 0) + speed * ORB_ROLL_SCALE * 2.2 * dt;
-  orb.rollYaw = (orb.rollYaw || 0) + (orb.vx || 0) * 1.6 * dt;
+  orb.rollAngle = (orb.rollAngle || 0) + speed * ORB_ROLL_SCALE * dt;
+  orb.rollYaw = (orb.rollYaw || 0) + (orb.vx || 0) * 0.4 * dt;
 
   // Fall off edge or into pit
   if (!hasSupport(orb.x, orb.z, trackHalf, pits)) {

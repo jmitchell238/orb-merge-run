@@ -154,11 +154,13 @@ function frame(now) {
       };
       player = {
         x: 0, targetX: 0, z: 8, value: 2, radius: radiusForValue(2),
-        squash: 1, visible: true,
+        squash: 1, visible: true, rollAngle: 0, rollYaw: 0,
       };
     }
     player.z = 8 + (now * 0.004) % 30;
     player.x = Math.sin(now * 0.001) * 1.5;
+    // Slow menu demo roll (flipbook)
+    player.rollAngle = (player.z / Math.max(0.25, player.radius)) * ROLL_RATE;
     drawWorld(player, levelData, dt);
   }
 
@@ -268,6 +270,8 @@ function init() {
 
   $('gfxBtn').textContent = save.gfx === 'low' ? '⚙️ GFX: Low' : '⚙️ GFX: High';
   resizeCanvas();
+  // Pre-bake roll flipbooks (sprite frames) for all tiers so first play is smooth
+  try { prebakeOrbSprites(); } catch (e) { /* canvas may be unavailable */ }
   requestAnimationFrame(frame);
 
   // Service worker

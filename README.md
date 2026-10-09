@@ -6,6 +6,8 @@ Based on the Ball Run 2048 style of game, with its own name and art.
 
 Play at https://jmitchell238.github.io/orb-merge-run/
 
+You can install it as an app from the browser (Add to Home Screen on iPhone and iPad).
+
 ## Controls
 
 | Input | Action |
@@ -22,31 +24,6 @@ Play at https://jmitchell238.github.io/orb-merge-run/
 - Rolling off the track or into a pit restarts the level. Coins are only kept if you reach the goal.
 - Levels unlock one after another and keep going. Each level is generated from its own seed, so a given level is always the same.
 
-## Running locally
+## Development
 
-```bash
-python3 -m http.server 8080
-```
-
-Then open http://localhost:8080. The service worker needs `localhost` or HTTPS.
-
-Plain HTML, CSS and canvas with Web Audio. Installable as a PWA, and progress is saved in localStorage.
-
-### Debug URL flags
-
-- `?debug=1`: FPS, hit radii, track edges, pits, coordinates
-- `?level=N`: start at level N
-- `?level=N&seed=S`: use a specific seed (also unlocks up to N)
-- `?level=N&unlock=1`: unlock up to level N
-
-## Tests
-
-```bash
-node tests/run.mjs
-```
-
-## Versioning
-
-`GAME_VERSION` in `js/config.js` is `MAJOR.MINOR.PATCH` with a three-digit patch. When you bump it, set `CACHE` in `sw.js` to `'orb-merge-run-' + GAME_VERSION`. The version shows in the game as `Orb Merge Run v…`.
-
-The design doc is [docs/DESIGN.md](docs/DESIGN.md).
+See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for running it locally, debug flags, tests and versioning, and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for how the code is organized. The original design doc is [docs/DESIGN.md](docs/DESIGN.md).

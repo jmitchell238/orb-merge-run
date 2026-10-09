@@ -1,11 +1,10 @@
 # Orb Merge Run
 
-Steer a numbered orb along a colorful track, **merge same numbers** to grow (2→4→8…→2048+), dodge thorns and pits, and hit the checkered goal.
+Steer a numbered orb down a candy-colored track. Roll into orbs with the same number to merge and grow (2 → 4 → 8 → … → 2048 and up), avoid thorns and pits, and reach the checkered goal.
 
-Genre-faithful hub clone of the “Ball Run 2048” loop — original branding not used.
+Based on the Ball Run 2048 style of game, with its own name and art.
 
-**Play (local):** open with any static server (see below).  
-**Play (planned Pages):** https://jmitchell238.github.io/orb-merge-run/
+Play at https://jmitchell238.github.io/orb-merge-run/
 
 ## Controls
 
@@ -13,26 +12,32 @@ Genre-faithful hub clone of the “Ball Run 2048” loop — original branding n
 |-------|--------|
 | Drag left/right | Steer |
 | ← → / A D | Steer |
-| Esc | Pause |
-| ☰ | Pause menu |
+| Esc or ☰ | Pause |
 
 ## Rules
 
-- Same number = merge (powers of two). Ball grows and changes color; **2048+** is rainbow.
-- Different number = soft nudge (no damage).
-- **Thorns** demote one tier (÷2, floor at 2).
-- Fall off the rail or into a **pit** = restart. Coins only bank at the goal.
-- 12 levels unlock linearly.
+- Hitting an orb with the same number merges it into yours. Your orb grows and changes color, and turns rainbow at 2048.
+- Hitting a different number just nudges you aside.
+- Thorns halve your number (it never drops below 2).
+- Rolling off the track or into a pit restarts the level. Coins are only kept if you reach the goal.
+- Levels unlock one after another and keep going. Each level is generated from its own seed, so a given level is always the same.
 
-## Stack
+## Running locally
 
-Static HTML/CSS/Canvas + WebAudio. Installable PWA. Progress in `localStorage`.
+```bash
+python3 -m http.server 8080
+```
 
-## Versioning
+Then open http://localhost:8080. The service worker needs `localhost` or HTTPS.
 
-- `GAME_VERSION` in `js/config.js` — `MAJOR.MINOR.PATCH` (patch zero-padded to 3 digits)
-- Keep `CACHE` in `sw.js` in sync: `'orb-merge-run-' + GAME_VERSION`
-- UI shows `Orb Merge Run v…`
+Plain HTML, CSS and canvas with Web Audio. Installable as a PWA, and progress is saved in localStorage.
+
+### Debug URL flags
+
+- `?debug=1`: FPS, hit radii, track edges, pits, coordinates
+- `?level=N`: start at level N
+- `?level=N&seed=S`: use a specific seed (also unlocks up to N)
+- `?level=N&unlock=1`: unlock up to level N
 
 ## Tests
 
@@ -40,21 +45,8 @@ Static HTML/CSS/Canvas + WebAudio. Installable PWA. Progress in `localStorage`.
 node tests/run.mjs
 ```
 
-## Local
+## Versioning
 
-```bash
-python3 -m http.server 8080
-```
+`GAME_VERSION` in `js/config.js` is `MAJOR.MINOR.PATCH` with a three-digit patch. When you bump it, set `CACHE` in `sw.js` to `'orb-merge-run-' + GAME_VERSION`. The version shows in the game as `Orb Merge Run v…`.
 
-Open `http://localhost:8080`. Service workers need http://localhost or https.
-
-## QA flags
-
-- `?debug=1` — FPS, hit radii, rail margins, pit volumes, coords
-- `?level=N` — start level N
-- `?level=N&seed=S` — force seed (also unlocks through N)
-- `?level=N&unlock=1` — unlock through N
-
-## Design
-
-See [`docs/DESIGN.md`](docs/DESIGN.md).
+The design doc is [docs/DESIGN.md](docs/DESIGN.md).

@@ -24,6 +24,10 @@ You can install it as an app from the browser (Add to Home Screen on iPhone and 
 - Rolling off the track or into a pit restarts the level. Coins are only kept if you reach the goal.
 - Levels unlock one after another and keep going. Each level is generated from its own seed, so a given level is always the same.
 
+## License
+
+© 2026 James Mitchell / 238 Apps. All rights reserved. You're welcome to play it at https://jmitchell238.github.io/orb-merge-run/, but the code, art and other content may not be copied, reused, republished or sold without permission. Third-party material keeps its own license. See [LICENSE](LICENSE), the [Terms of Use](https://jmitchell238.github.io/arcade-hub/terms.html) and the [Privacy Policy](https://jmitchell238.github.io/arcade-hub/privacy.html).
+
 ## Development
 
 See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for running it locally, debug flags, tests and versioning, and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for how the code is organized. The original design doc is [docs/DESIGN.md](docs/DESIGN.md).
